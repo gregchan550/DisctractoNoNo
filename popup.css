@@ -148,6 +148,23 @@ body {
   width: auto;
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.session-message {
+  text-align: center;
+  font-size: 12px;
+  color: #dc3545;
+  background: #fff3cd;
+  padding: 10px;
+  border-radius: 6px;
+  margin-top: 10px;
+  border: 1px solid #ffc107;
+}
+
 .divider {
   height: 1px;
   background: #e9ecef;
@@ -216,6 +233,20 @@ body {
 .add-site input:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.add-site input:disabled {
+  background: #e9ecef;
+  cursor: not-allowed;
+}
+
+.site-item button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.site-item button:disabled:hover {
+  background: #dc3545;
 }
 
 .add-site .btn-small {

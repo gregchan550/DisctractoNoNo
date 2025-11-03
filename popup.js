@@ -4,7 +4,7 @@ const statusTitle = document.getElementById('statusTitle');
 const statusTime = document.getElementById('statusTime');
 const durationSelect = document.getElementById('duration');
 const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
+const sessionActiveMessage = document.getElementById('sessionActiveMessage');
 const sitesList = document.getElementById('sitesList');
 const newSiteInput = document.getElementById('newSite');
 const addSiteBtn = document.getElementById('addSiteBtn');
@@ -28,15 +28,29 @@ function updateUI(isBlocking, endTime) {
     statusIndicator.classList.add('active');
     statusTitle.textContent = 'Focus session active';
     startBtn.style.display = 'none';
-    stopBtn.style.display = 'block';
+    sessionActiveMessage.style.display = 'block';
     durationSelect.disabled = true;
+    // Disable adding/removing sites during active session
+    newSiteInput.disabled = true;
+    addSiteBtn.disabled = true;
+    // Re-render sites to apply disabled state
+    chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
+      renderSites(blockedSites || []);
+    });
   } else {
     statusIndicator.classList.remove('active');
     statusTitle.textContent = 'Ready to focus';
     statusTime.textContent = '';
     startBtn.style.display = 'block';
-    stopBtn.style.display = 'none';
+    sessionActiveMessage.style.display = 'none';
     durationSelect.disabled = false;
+    // Re-enable adding/removing sites
+    newSiteInput.disabled = false;
+    addSiteBtn.disabled = false;
+    // Re-render sites to remove disabled state
+    chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
+      renderSites(blockedSites || []);
+    });
   }
 }
 
@@ -61,22 +75,32 @@ function updateTimer() {
   });
 }
 
-function renderSites(sites) {
+async function renderSites(sites) {
   if (sites.length === 0) {
     sitesList.innerHTML = '<div class="empty-message">No sites blocked</div>';
     return;
   }
   
+  // Check if blocking is active
+  const { isBlocking } = await chrome.storage.local.get(['isBlocking']);
+  const disabled = isBlocking ? 'disabled' : '';
+  
   sitesList.innerHTML = sites.map(site => `
     <div class="site-item">
       <span>${site}</span>
-      <button data-site="${site}" class="remove-site">Remove</button>
+      <button data-site="${site}" class="remove-site" ${disabled}>Remove</button>
     </div>
   `).join('');
   
   // Add event listeners to remove buttons
   sitesList.querySelectorAll('.remove-site').forEach(btn => {
     btn.addEventListener('click', async (e) => {
+      // Prevent removal during active session
+      const { isBlocking } = await chrome.storage.local.get(['isBlocking']);
+      if (isBlocking) {
+        return;
+      }
+      
       const siteToRemove = e.target.dataset.site;
       const { blockedSites } = await chrome.storage.local.get(['blockedSites']);
       const updated = blockedSites.filter(s => s !== siteToRemove);
@@ -101,18 +125,14 @@ startBtn.addEventListener('click', async () => {
   setInterval(updateTimer, 1000);
 });
 
-// Stop focus session
-stopBtn.addEventListener('click', async () => {
-  await chrome.storage.local.set({
-    isBlocking: false,
-    endTime: null
-  });
-  
-  updateUI(false, null);
-});
-
 // Add new site
 addSiteBtn.addEventListener('click', async () => {
+  // Prevent adding during active session
+  const { isBlocking } = await chrome.storage.local.get(['isBlocking']);
+  if (isBlocking) {
+    return;
+  }
+  
   const site = newSiteInput.value.trim().toLowerCase();
   
   if (!site) {
