@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DistractoNoNo</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚫 DistractoNoNo</h1>
+      <p class="subtitle">Stay focused, get things done</p>
+    </div>
+
+    <div id="status" class="status">
+      <div class="status-indicator" id="statusIndicator"></div>
+      <div class="status-text">
+        <strong id="statusTitle">Ready to focus</strong>
+        <span id="statusTime"></span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="time-selector">
+        <label for="duration">Block for:</label>
+        <select id="duration">
+          <option value="15">15 minutes</option>
+          <option value="30" selected>30 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="120">2 hours</option>
+          <option value="180">3 hours</option>
+          <option value="240">4 hours</option>
+        </select>
+      </div>
+
+      <button id="startBtn" class="btn btn-primary">Start Focus Session</button>
+      <button id="stopBtn" class="btn btn-secondary" style="display: none;">Stop Focus Session</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="blocked-sites">
+      <h3>Blocked Sites</h3>
+      <div id="sitesList" class="sites-list"></div>
+      <div class="add-site">
+        <input type="text" id="newSite" placeholder="Add site (e.g., twitter.com)">
+        <button id="addSiteBtn" class="btn btn-small">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
