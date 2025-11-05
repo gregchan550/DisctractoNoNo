@@ -34,12 +34,21 @@ presetButtons.forEach(btn => {
 });
 
 // Scroll/wheel support for 5-minute increments
+let scrollTimeout;
 durationSelect.addEventListener('wheel', (e) => {
   if (durationSelect.disabled) return;
   e.preventDefault();
   const currentValue = parseInt(durationSelect.value) || 30;
   const delta = e.deltaY > 0 ? -5 : 5;
   const newValue = Math.max(5, Math.min(480, currentValue + delta));
+  
+  // Add visual feedback
+  durationSelect.classList.add('scrolling');
+  clearTimeout(scrollTimeout);
+  scrollTimeout = setTimeout(() => {
+    durationSelect.classList.remove('scrolling');
+  }, 150);
+  
   durationSelect.value = newValue;
   updatePresetButtons();
 });

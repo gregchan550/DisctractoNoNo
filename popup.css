@@ -98,19 +98,28 @@ body {
 .duration-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  position: relative;
+  width: 100%;
   margin-bottom: 10px;
 }
 
 .time-selector input[type="number"] {
-  flex: 1;
-  padding: 10px;
+  width: 100%;
+  padding: 10px 70px 10px 10px;
   border: 2px solid #e9ecef;
   border-radius: 8px;
   font-size: 14px;
   background: white;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+  appearance: textfield;
   -moz-appearance: textfield; /* Firefox */
+  cursor: ns-resize;
+  text-align: left;
+}
+
+.time-selector input[type="number"]:hover {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .time-selector input[type="number"]::-webkit-outer-spin-button,
@@ -122,13 +131,66 @@ body {
 .time-selector input[type="number"]:focus {
   outline: none;
   border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.time-selector input[type="number"].scrolling {
+  transform: scale(1.02);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+  animation: scrollPulse 0.15s ease-out;
+}
+
+@keyframes scrollPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1.02);
+  }
 }
 
 .duration-unit {
+  position: absolute;
+  right: 12px;
   font-size: 14px;
   color: #6c757d;
   font-weight: 500;
   white-space: nowrap;
+  pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.scroll-hint {
+  position: absolute;
+  right: 58px;
+  font-size: 16px;
+  color: #adb5bd;
+  cursor: ns-resize;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.duration-input-wrapper:hover .scroll-hint,
+.duration-input-wrapper:focus-within .scroll-hint {
+  opacity: 1;
+  color: #667eea;
+  transform: translateY(-50%) scale(1.1);
 }
 
 .preset-buttons {
