@@ -72,6 +72,49 @@ function isBlockedSite(url, blockedSites) {
   }
 }
 
+// Store original URL for a tab when redirecting to blocked page
+async function storeOriginalUrl(tabId, originalUrl) {
+  try {
+    const { blockedTabUrls } = await chrome.storage.local.get(['blockedTabUrls']);
+    const urls = blockedTabUrls || {};
+    urls[tabId] = originalUrl;
+    await chrome.storage.local.set({ blockedTabUrls: urls });
+  } catch (e) {
+    console.error('Error storing original URL:', e);
+  }
+}
+
+// Restore tabs to their original URLs
+async function restoreBlockedTabs() {
+  try {
+    const { blockedTabUrls } = await chrome.storage.local.get(['blockedTabUrls']);
+    if (!blockedTabUrls) return;
+    
+    const blockedUrl = chrome.runtime.getURL('blocked.html');
+    const tabs = await chrome.tabs.query({});
+    
+    for (const tab of tabs) {
+      if (tab.url && tab.url.includes('blocked.html')) {
+        const originalUrl = blockedTabUrls[tab.id];
+        if (originalUrl) {
+          try {
+            await chrome.tabs.update(tab.id, { url: originalUrl });
+            // Remove from storage after restoring
+            delete blockedTabUrls[tab.id];
+          } catch (e) {
+            console.log('Could not restore tab:', e);
+          }
+        }
+      }
+    }
+    
+    // Update storage with cleaned up URLs
+    await chrome.storage.local.set({ blockedTabUrls });
+  } catch (e) {
+    console.error('Error restoring tabs:', e);
+  }
+}
+
 // Redirect existing tabs that are on blocked sites
 async function redirectExistingTabs() {
   const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
@@ -90,6 +133,8 @@ async function redirectExistingTabs() {
         // Only redirect if it's not already the blocked page
         if (!tab.url.includes('blocked.html')) {
           try {
+            // Store original URL before redirecting
+            await storeOriginalUrl(tab.id, tab.url);
             await chrome.tabs.update(tab.id, { url: blockedUrl });
           } catch (e) {
             // Ignore errors (e.g., chrome:// pages can't be redirected)
@@ -116,6 +161,11 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
           redirectExistingTabs();
         }, 100);
       }
+      
+      // If blocking just ended, restore tabs
+      if (changes.isBlocking && changes.isBlocking.newValue === false) {
+        await restoreBlockedTabs();
+      }
     }
   }
 });
@@ -129,6 +179,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (isBlocking && endTime && now >= endTime) {
       await chrome.storage.local.set({ isBlocking: false, endTime: null });
       await updateBlockingRules();
+      
+      // Restore blocked tabs to their original URLs
+      await restoreBlockedTabs();
       
       // Show notification
       chrome.notifications.create({
@@ -155,6 +208,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         // Redirect to blocked page
         const blockedUrl = chrome.runtime.getURL('blocked.html');
         try {
+          // Store original URL before redirecting
+          await storeOriginalUrl(tabId, tab.url);
           await chrome.tabs.update(tabId, { url: blockedUrl });
         } catch (e) {
           // Ignore errors for pages that can't be redirected
@@ -162,5 +217,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         }
       }
     }
+  }
+});
+
+// Clean up stored URLs when tabs are closed
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try {
+    const { blockedTabUrls } = await chrome.storage.local.get(['blockedTabUrls']);
+    if (blockedTabUrls && blockedTabUrls[tabId]) {
+      delete blockedTabUrls[tabId];
+      await chrome.storage.local.set({ blockedTabUrls });
+    }
+  } catch (e) {
+    console.error('Error cleaning up tab URL:', e);
   }
 });
