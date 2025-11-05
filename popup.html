@@ -24,14 +24,16 @@
     <div class="controls">
       <div class="time-selector">
         <label for="duration">Block for:</label>
-        <select id="duration">
-          <option value="15">15 minutes</option>
-          <option value="30" selected>30 minutes</option>
-          <option value="60">1 hour</option>
-          <option value="120">2 hours</option>
-          <option value="180">3 hours</option>
-          <option value="240">4 hours</option>
-        </select>
+        <div class="duration-input-wrapper">
+          <input type="number" id="duration" min="5" max="480" step="5" value="30">
+          <span class="duration-unit">minutes</span>
+        </div>
+        <div class="preset-buttons">
+          <button type="button" class="preset-btn" data-minutes="30">30 min</button>
+          <button type="button" class="preset-btn" data-minutes="60">60 min</button>
+          <button type="button" class="preset-btn" data-minutes="90">90 min</button>
+          <button type="button" class="preset-btn" data-minutes="120">120 min</button>
+        </div>
       </div>
 
       <button id="startBtn" class="btn btn-primary">Start Focus Session</button>

@@ -8,6 +8,44 @@ const sessionActiveMessage = document.getElementById('sessionActiveMessage');
 const sitesList = document.getElementById('sitesList');
 const newSiteInput = document.getElementById('newSite');
 const addSiteBtn = document.getElementById('addSiteBtn');
+const presetButtons = document.querySelectorAll('.preset-btn');
+
+// Update preset button active states
+function updatePresetButtons() {
+  const currentValue = parseInt(durationSelect.value) || 30;
+  presetButtons.forEach(btn => {
+    const btnMinutes = parseInt(btn.dataset.minutes);
+    if (btnMinutes === currentValue) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+// Preset button click handlers
+presetButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (durationSelect.disabled) return; // Don't allow changes during active session
+    const minutes = parseInt(btn.dataset.minutes);
+    durationSelect.value = minutes;
+    updatePresetButtons();
+  });
+});
+
+// Scroll/wheel support for 5-minute increments
+durationSelect.addEventListener('wheel', (e) => {
+  if (durationSelect.disabled) return;
+  e.preventDefault();
+  const currentValue = parseInt(durationSelect.value) || 30;
+  const delta = e.deltaY > 0 ? -5 : 5;
+  const newValue = Math.max(5, Math.min(480, currentValue + delta));
+  durationSelect.value = newValue;
+  updatePresetButtons();
+});
+
+// Update preset buttons when input changes
+durationSelect.addEventListener('input', updatePresetButtons);
 
 // Load initial state
 async function loadState() {
@@ -15,6 +53,7 @@ async function loadState() {
   
   updateUI(isBlocking, endTime);
   renderSites(blockedSites || []);
+  updatePresetButtons();
   
   // Update timer every second if blocking is active
   if (isBlocking && endTime) {
@@ -30,6 +69,8 @@ function updateUI(isBlocking, endTime) {
     startBtn.style.display = 'none';
     sessionActiveMessage.style.display = 'block';
     durationSelect.disabled = true;
+    // Disable preset buttons during active session
+    presetButtons.forEach(btn => btn.disabled = true);
     // Disable adding/removing sites during active session
     newSiteInput.disabled = true;
     addSiteBtn.disabled = true;
@@ -44,6 +85,9 @@ function updateUI(isBlocking, endTime) {
     startBtn.style.display = 'block';
     sessionActiveMessage.style.display = 'none';
     durationSelect.disabled = false;
+    // Re-enable preset buttons
+    presetButtons.forEach(btn => btn.disabled = false);
+    updatePresetButtons();
     // Re-enable adding/removing sites
     newSiteInput.disabled = false;
     addSiteBtn.disabled = false;
@@ -112,7 +156,22 @@ async function renderSites(sites) {
 
 // Start focus session
 startBtn.addEventListener('click', async () => {
-  const minutes = parseInt(durationSelect.value);
+  let minutes = parseInt(durationSelect.value);
+  
+  // Validate and round to nearest 5 minutes
+  if (isNaN(minutes) || minutes < 5) {
+    minutes = 5;
+  } else if (minutes > 480) {
+    minutes = 480;
+  } else {
+    // Round to nearest 5-minute increment
+    minutes = Math.round(minutes / 5) * 5;
+  }
+  
+  // Update the input value to show the rounded value
+  durationSelect.value = minutes;
+  updatePresetButtons();
+  
   const endTime = Date.now() + (minutes * 60 * 1000);
   
   await chrome.storage.local.set({

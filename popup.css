@@ -95,20 +95,85 @@ body {
   color: #495057;
 }
 
-.time-selector select {
-  width: 100%;
+.duration-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.time-selector input[type="number"] {
+  flex: 1;
   padding: 10px;
   border: 2px solid #e9ecef;
   border-radius: 8px;
   font-size: 14px;
   background: white;
-  cursor: pointer;
   transition: border-color 0.2s;
+  -moz-appearance: textfield; /* Firefox */
 }
 
-.time-selector select:focus {
+.time-selector input[type="number"]::-webkit-outer-spin-button,
+.time-selector input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.time-selector input[type="number"]:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.duration-unit {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.preset-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+  font-weight: 500;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-btn:hover {
+  background: #f8f9fa;
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.preset-btn.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+}
+
+.preset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: white;
+  color: #6c757d;
+  border-color: #e9ecef;
+}
+
+.preset-btn:disabled:hover {
+  background: white;
+  border-color: #e9ecef;
+  color: #6c757d;
 }
 
 .btn {
