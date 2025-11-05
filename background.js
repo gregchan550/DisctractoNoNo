@@ -60,11 +60,62 @@ async function updateBlockingRules() {
   }
 }
 
+// Check if URL matches any blocked site
+function isBlockedSite(url, blockedSites) {
+  if (!url || !blockedSites) return false;
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.replace(/^www\./, '');
+    return blockedSites.some(site => hostname.includes(site));
+  } catch (e) {
+    return false;
+  }
+}
+
+// Redirect existing tabs that are on blocked sites
+async function redirectExistingTabs() {
+  const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
+  
+  if (!isBlocking || !endTime || !blockedSites) return;
+  
+  const now = Date.now();
+  if (now >= endTime) return;
+  
+  try {
+    const tabs = await chrome.tabs.query({});
+    const blockedUrl = chrome.runtime.getURL('blocked.html');
+    
+    for (const tab of tabs) {
+      if (tab.url && isBlockedSite(tab.url, blockedSites)) {
+        // Only redirect if it's not already the blocked page
+        if (!tab.url.includes('blocked.html')) {
+          try {
+            await chrome.tabs.update(tab.id, { url: blockedUrl });
+          } catch (e) {
+            // Ignore errors (e.g., chrome:// pages can't be redirected)
+            console.log('Could not redirect tab:', tab.url);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error redirecting tabs:', e);
+  }
+}
+
 // Listen for storage changes
-chrome.storage.onChanged.addListener((changes, areaName) => {
+chrome.storage.onChanged.addListener(async (changes, areaName) => {
   if (areaName === 'local') {
     if (changes.isBlocking || changes.endTime || changes.blockedSites) {
-      updateBlockingRules();
+      await updateBlockingRules();
+      
+      // If blocking just started, redirect existing tabs
+      if (changes.isBlocking && changes.isBlocking.newValue === true) {
+        // Small delay to ensure blocking rules are updated first
+        setTimeout(() => {
+          redirectExistingTabs();
+        }, 100);
+      }
     }
   }
 });
@@ -92,3 +143,24 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 // Periodic check every minute
 chrome.alarms.create('checkBlockEnd', { periodInMinutes: 1 });
+
+// Listen for tab updates to catch any navigation to blocked sites
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading' && tab.url) {
+    const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
+    
+    if (isBlocking && endTime && blockedSites) {
+      const now = Date.now();
+      if (now < endTime && isBlockedSite(tab.url, blockedSites)) {
+        // Redirect to blocked page
+        const blockedUrl = chrome.runtime.getURL('blocked.html');
+        try {
+          await chrome.tabs.update(tabId, { url: blockedUrl });
+        } catch (e) {
+          // Ignore errors for pages that can't be redirected
+          console.log('Could not redirect tab:', tab.url);
+        }
+      }
+    }
+  }
+});
