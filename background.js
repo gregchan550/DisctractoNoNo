@@ -1,12 +1,37 @@
 // Default blocked sites
 const DEFAULT_BLOCKED_SITES = [
+  // Social media
   'youtube.com',
   'instagram.com',
   'facebook.com',
   'twitter.com',
   'x.com',
   'tiktok.com',
-  'reddit.com'
+  'reddit.com',
+  'snapchat.com',
+  'pinterest.com',
+  'linkedin.com',
+  // Streaming services
+  'netflix.com',
+  'hulu.com',
+  'disneyplus.com',
+  'disney.com',
+  'primevideo.com',
+  'hbomax.com',
+  'max.com',
+  'paramountplus.com',
+  'peacocktv.com',
+  'peacock.com',
+  'appletv.com',
+  'tv.apple.com',
+  'crunchyroll.com',
+  'funimation.com',
+  'vrv.co',
+  'twitch.tv',
+  'spotify.com',
+  'soundcloud.com',
+  'pandora.com',
+  'youtube-music.com'
 ];
 
 // Initialize extension
@@ -165,6 +190,19 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
       // If blocking just ended, restore tabs
       if (changes.isBlocking && changes.isBlocking.newValue === false) {
         await restoreBlockedTabs();
+      }
+      
+      // If blocked sites changed during active session, redirect any newly blocked tabs
+      if (changes.blockedSites) {
+        const { isBlocking, endTime } = await chrome.storage.local.get(['isBlocking', 'endTime']);
+        if (isBlocking && endTime) {
+          const now = Date.now();
+          if (now < endTime) {
+            setTimeout(() => {
+              redirectExistingTabs();
+            }, 100);
+          }
+        }
       }
     }
   }

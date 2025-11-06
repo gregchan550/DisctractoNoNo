@@ -3,12 +3,25 @@ const statusIndicator = document.getElementById('statusIndicator');
 const statusTitle = document.getElementById('statusTitle');
 const statusTime = document.getElementById('statusTime');
 const durationSelect = document.getElementById('duration');
+const durationLabel = document.getElementById('durationLabel');
 const startBtn = document.getElementById('startBtn');
 const sessionActiveMessage = document.getElementById('sessionActiveMessage');
 const sitesList = document.getElementById('sitesList');
 const newSiteInput = document.getElementById('newSite');
 const addSiteBtn = document.getElementById('addSiteBtn');
 const presetButtons = document.querySelectorAll('.preset-btn');
+const autocompleteList = document.getElementById('autocompleteList');
+
+// Common sites for autocomplete
+const COMMON_SITES = [
+  'youtube.com', 'instagram.com', 'facebook.com', 'twitter.com', 'x.com',
+  'tiktok.com', 'reddit.com', 'snapchat.com', 'pinterest.com', 'linkedin.com',
+  'netflix.com', 'hulu.com', 'disneyplus.com', 'amazon.com', 'ebay.com',
+  'twitch.tv', 'discord.com', 'spotify.com', 'soundcloud.com', 'vimeo.com',
+  'dailymotion.com', 'bilibili.com', 'medium.com', 'quora.com', 'stackoverflow.com',
+  'github.com', 'gitlab.com', 'bitbucket.org', 'trello.com', 'asana.com',
+  'slack.com', 'zoom.us', 'teams.microsoft.com', 'outlook.com', 'gmail.com'
+];
 
 // Update preset button active states
 function updatePresetButtons() {
@@ -75,15 +88,17 @@ function updateUI(isBlocking, endTime) {
   if (isBlocking && endTime) {
     statusIndicator.classList.add('active');
     statusTitle.textContent = 'Focus session active';
-    startBtn.style.display = 'none';
-    sessionActiveMessage.style.display = 'block';
-    durationSelect.disabled = true;
-    // Disable preset buttons during active session
-    presetButtons.forEach(btn => btn.disabled = true);
-    // Disable adding/removing sites during active session
-    newSiteInput.disabled = true;
-    addSiteBtn.disabled = true;
-    // Re-render sites to apply disabled state
+    startBtn.textContent = 'Add Time to Session';
+    startBtn.style.display = 'block';
+    sessionActiveMessage.style.display = 'none';
+    durationLabel.textContent = 'Add time to session:';
+    // Allow time adjustment during session
+    durationSelect.disabled = false;
+    presetButtons.forEach(btn => btn.disabled = false);
+    // Allow adding/removing sites during active session
+    newSiteInput.disabled = false;
+    addSiteBtn.disabled = false;
+    // Re-render sites
     chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
       renderSites(blockedSites || []);
     });
@@ -91,16 +106,16 @@ function updateUI(isBlocking, endTime) {
     statusIndicator.classList.remove('active');
     statusTitle.textContent = 'Ready to focus';
     statusTime.textContent = '';
+    startBtn.textContent = 'Start Focus Session';
     startBtn.style.display = 'block';
     sessionActiveMessage.style.display = 'none';
+    durationLabel.textContent = 'Block for:';
     durationSelect.disabled = false;
-    // Re-enable preset buttons
     presetButtons.forEach(btn => btn.disabled = false);
     updatePresetButtons();
-    // Re-enable adding/removing sites
     newSiteInput.disabled = false;
     addSiteBtn.disabled = false;
-    // Re-render sites to remove disabled state
+    // Re-render sites
     chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
       renderSites(blockedSites || []);
     });
@@ -134,26 +149,16 @@ async function renderSites(sites) {
     return;
   }
   
-  // Check if blocking is active
-  const { isBlocking } = await chrome.storage.local.get(['isBlocking']);
-  const disabled = isBlocking ? 'disabled' : '';
-  
   sitesList.innerHTML = sites.map(site => `
     <div class="site-item">
       <span>${site}</span>
-      <button data-site="${site}" class="remove-site" ${disabled}>Remove</button>
+      <button data-site="${site}" class="remove-site">Remove</button>
     </div>
   `).join('');
   
   // Add event listeners to remove buttons
   sitesList.querySelectorAll('.remove-site').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      // Prevent removal during active session
-      const { isBlocking } = await chrome.storage.local.get(['isBlocking']);
-      if (isBlocking) {
-        return;
-      }
-      
       const siteToRemove = e.target.dataset.site;
       const { blockedSites } = await chrome.storage.local.get(['blockedSites']);
       const updated = blockedSites.filter(s => s !== siteToRemove);
@@ -163,7 +168,7 @@ async function renderSites(sites) {
   });
 }
 
-// Start focus session
+// Start focus session or extend current session
 startBtn.addEventListener('click', async () => {
   let minutes = parseInt(durationSelect.value);
   
@@ -181,26 +186,31 @@ startBtn.addEventListener('click', async () => {
   durationSelect.value = minutes;
   updatePresetButtons();
   
-  const endTime = Date.now() + (minutes * 60 * 1000);
+  const { isBlocking, endTime: currentEndTime } = await chrome.storage.local.get(['isBlocking', 'endTime']);
+  
+  let newEndTime;
+  if (isBlocking && currentEndTime) {
+    // Extend current session
+    const now = Date.now();
+    const remaining = Math.max(0, currentEndTime - now);
+    newEndTime = now + remaining + (minutes * 60 * 1000);
+  } else {
+    // Start new session
+    newEndTime = Date.now() + (minutes * 60 * 1000);
+  }
   
   await chrome.storage.local.set({
     isBlocking: true,
-    endTime: endTime
+    endTime: newEndTime
   });
   
-  updateUI(true, endTime);
+  updateUI(true, newEndTime);
   updateTimer();
   setInterval(updateTimer, 1000);
 });
 
 // Add new site
 addSiteBtn.addEventListener('click', async () => {
-  // Prevent adding during active session
-  const { isBlocking } = await chrome.storage.local.get(['isBlocking']);
-  if (isBlocking) {
-    return;
-  }
-  
   const site = newSiteInput.value.trim().toLowerCase();
   
   if (!site) {
@@ -220,11 +230,115 @@ addSiteBtn.addEventListener('click', async () => {
   
   renderSites(updated);
   newSiteInput.value = '';
+  autocompleteList.style.display = 'none';
+  selectedAutocompleteIndex = -1;
+});
+
+// Autocomplete functionality
+let selectedAutocompleteIndex = -1;
+
+function showAutocomplete(input) {
+  const value = input.value.toLowerCase().trim();
+  if (!value) {
+    autocompleteList.innerHTML = '';
+    autocompleteList.style.display = 'none';
+    selectedAutocompleteIndex = -1;
+    return;
+  }
+
+  // Filter common sites and existing blocked sites
+  chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
+    const blocked = blockedSites || [];
+    const suggestions = COMMON_SITES.filter(site => 
+      site.includes(value) && !blocked.includes(site)
+    ).slice(0, 5);
+
+    if (suggestions.length === 0) {
+      autocompleteList.innerHTML = '';
+      autocompleteList.style.display = 'none';
+      return;
+    }
+
+    autocompleteList.innerHTML = suggestions.map((site, index) => 
+      `<div class="autocomplete-item" data-index="${index}" data-site="${site}">${site}</div>`
+    ).join('');
+    autocompleteList.style.display = 'block';
+    selectedAutocompleteIndex = -1;
+  });
+}
+
+function selectAutocompleteItem(index) {
+  const items = autocompleteList.querySelectorAll('.autocomplete-item');
+  if (items.length === 0) return;
+  
+  items.forEach((item, i) => {
+    item.classList.toggle('selected', i === index);
+  });
+  
+  if (index >= 0 && index < items.length) {
+    selectedAutocompleteIndex = index;
+  }
+}
+
+function useAutocompleteItem(index) {
+  const items = autocompleteList.querySelectorAll('.autocomplete-item');
+  if (index >= 0 && index < items.length) {
+    const site = items[index].dataset.site;
+    newSiteInput.value = site;
+    autocompleteList.style.display = 'none';
+    selectedAutocompleteIndex = -1;
+    addSiteBtn.click();
+  }
+}
+
+// Autocomplete event listeners
+newSiteInput.addEventListener('input', (e) => {
+  showAutocomplete(e.target);
+});
+
+newSiteInput.addEventListener('keydown', (e) => {
+  const items = autocompleteList.querySelectorAll('.autocomplete-item');
+  
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedAutocompleteIndex = Math.min(selectedAutocompleteIndex + 1, items.length - 1);
+    selectAutocompleteItem(selectedAutocompleteIndex);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedAutocompleteIndex = Math.max(selectedAutocompleteIndex - 1, -1);
+    selectAutocompleteItem(selectedAutocompleteIndex);
+  } else if (e.key === 'Enter' && selectedAutocompleteIndex >= 0) {
+    e.preventDefault();
+    useAutocompleteItem(selectedAutocompleteIndex);
+  } else if (e.key === 'Escape') {
+    autocompleteList.style.display = 'none';
+    selectedAutocompleteIndex = -1;
+  } else if (e.key === 'Enter' && selectedAutocompleteIndex === -1) {
+    // Regular Enter key to add site
+    addSiteBtn.click();
+  }
+});
+
+// Click on autocomplete item
+autocompleteList.addEventListener('click', (e) => {
+  const item = e.target.closest('.autocomplete-item');
+  if (item) {
+    const index = parseInt(item.dataset.index);
+    useAutocompleteItem(index);
+  }
+});
+
+// Hide autocomplete when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.autocomplete-wrapper')) {
+    autocompleteList.style.display = 'none';
+    selectedAutocompleteIndex = -1;
+  }
 });
 
 // Allow Enter key to add site
 newSiteInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && selectedAutocompleteIndex === -1) {
     addSiteBtn.click();
   }
 });

@@ -23,7 +23,7 @@
 
     <div class="controls">
       <div class="time-selector">
-        <label for="duration">Block for:</label>
+        <label for="duration" id="durationLabel">Block for:</label>
         <div class="duration-input-wrapper">
           <input type="number" id="duration" min="5" max="480" step="5" value="30" title="Scroll to adjust">
           <span class="duration-unit">minutes</span>
@@ -49,7 +49,10 @@
       <h3>Blocked Sites</h3>
       <div id="sitesList" class="sites-list"></div>
       <div class="add-site">
-        <input type="text" id="newSite" placeholder="Add site (e.g., twitter.com)">
+        <div class="autocomplete-wrapper">
+          <input type="text" id="newSite" placeholder="Add site (e.g., twitter.com)" autocomplete="off">
+          <div id="autocompleteList" class="autocomplete-list"></div>
+        </div>
         <button id="addSiteBtn" class="btn btn-small">Add</button>
       </div>
     </div>
