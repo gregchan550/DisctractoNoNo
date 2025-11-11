@@ -46,14 +46,14 @@ presetButtons.forEach(btn => {
   });
 });
 
-// Scroll/wheel support for 5-minute increments
+// Scroll/wheel support for 1-minute increments
 let scrollTimeout;
 durationSelect.addEventListener('wheel', (e) => {
   if (durationSelect.disabled) return;
   e.preventDefault();
   const currentValue = parseInt(durationSelect.value) || 30;
-  const delta = e.deltaY > 0 ? -5 : 5;
-  const newValue = Math.max(5, Math.min(480, currentValue + delta));
+  const delta = e.deltaY > 0 ? -1 : 1;
+  const newValue = Math.max(1, Math.min(240, currentValue + delta));
   
   // Add visual feedback
   durationSelect.classList.add('scrolling');
@@ -172,17 +172,14 @@ async function renderSites(sites) {
 startBtn.addEventListener('click', async () => {
   let minutes = parseInt(durationSelect.value);
   
-  // Validate and round to nearest 5 minutes
-  if (isNaN(minutes) || minutes < 5) {
-    minutes = 5;
-  } else if (minutes > 480) {
-    minutes = 480;
-  } else {
-    // Round to nearest 5-minute increment
-    minutes = Math.round(minutes / 5) * 5;
+  // Validate without rounding - use whatever user types
+  if (isNaN(minutes) || minutes < 1) {
+    minutes = 1;
+  } else if (minutes > 240) {
+    minutes = 240;
   }
   
-  // Update the input value to show the rounded value
+  // Update the input value to show the validated value
   durationSelect.value = minutes;
   updatePresetButtons();
   
