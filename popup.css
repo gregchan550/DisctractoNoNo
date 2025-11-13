@@ -355,21 +355,14 @@ body {
   gap: 12px;
 }
 
-.track-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.track-selector-wrapper {
+  position: relative;
+  margin-bottom: 12px;
 }
 
-.track-selector label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.track-select {
+.track-selector-btn {
   width: 100%;
-  padding: 8px;
+  padding: 10px 12px;
   border: 2px solid var(--input-border);
   border-radius: 6px;
   font-size: 13px;
@@ -377,43 +370,95 @@ body {
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
 }
 
-.track-select:hover {
+.track-selector-btn:hover {
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.track-select:focus {
+.track-selector-btn:focus {
   outline: none;
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
 }
 
-.track-select:disabled {
-  background: var(--bg-tertiary);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.current-track {
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  text-align: center;
-  margin-bottom: 8px;
-}
-
 .track-name {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-style: italic;
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
 }
 
 .track-name.playing {
   color: #667eea;
   font-weight: 500;
-  font-style: normal;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-left: 8px;
+  transition: transform 0.2s;
+}
+
+.track-selector-btn.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.track-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border: 2px solid var(--input-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+  margin-top: 4px;
+}
+
+.track-dropdown.show {
+  display: block;
+}
+
+.track-category {
+  padding: 4px 0;
+}
+
+.category-header {
+  padding: 8px 12px 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.track-option {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.track-option:hover {
+  background-color: var(--bg-secondary);
+  color: #667eea;
+}
+
+.track-option.selected {
+  background-color: var(--bg-secondary);
+  color: #667eea;
+  font-weight: 500;
 }
 
 .progress-section {

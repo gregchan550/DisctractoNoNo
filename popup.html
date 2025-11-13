@@ -48,23 +48,25 @@
     <div class="music-player">
       <h3>Focus Sounds</h3>
       <div class="player-controls">
-        <div class="track-selector">
-          <label for="trackSelect">Select Sound:</label>
-          <select id="trackSelect" class="track-select">
-            <option value="">-- Choose a sound --</option>
-            <optgroup label="Ambient">
-              <option value="sounds/ambient/museum-cafe.mp3">Museum Cafe</option>
-            </optgroup>
-            <optgroup label="Nature">
-              <option value="sounds/nature/calm-sea.mp3">Calm Sea</option>
-            </optgroup>
-            <optgroup label="Focus">
-              <option value="sounds/focus/triple-binaurial.ogg">Triple Binaurial</option>
-            </optgroup>
-          </select>
-        </div>
-        <div class="current-track">
-          <span id="currentTrackName" class="track-name">No track selected</span>
+        <div class="track-selector-wrapper">
+          <button id="trackSelectorBtn" class="track-selector-btn">
+            <span id="currentTrackName" class="track-name">No track selected</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+          <div id="trackDropdown" class="track-dropdown">
+            <div class="track-category">
+              <div class="category-header">Ambient</div>
+              <div class="track-option" data-path="sounds/ambient/museum-cafe.mp3">Museum Cafe</div>
+            </div>
+            <div class="track-category">
+              <div class="category-header">Nature</div>
+              <div class="track-option" data-path="sounds/nature/calm-sea.mp3">Calm Sea</div>
+            </div>
+            <div class="track-category">
+              <div class="category-header">Focus</div>
+              <div class="track-option" data-path="sounds/focus/triple-binaurial.ogg">Triple Binaurial</div>
+            </div>
+          </div>
         </div>
         <div class="progress-section">
           <span id="currentTime" class="time-display">0:00</span>

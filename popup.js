@@ -13,7 +13,8 @@ const presetButtons = document.querySelectorAll('.preset-btn');
 const autocompleteList = document.getElementById('autocompleteList');
 
 // Music player DOM elements
-const trackSelect = document.getElementById('trackSelect');
+const trackSelectorBtn = document.getElementById('trackSelectorBtn');
+const trackDropdown = document.getElementById('trackDropdown');
 const playPauseBtn = document.getElementById('playPauseBtn');
 const playPauseIcon = document.getElementById('playPauseIcon');
 const prevBtn = document.getElementById('prevBtn');
@@ -441,6 +442,9 @@ function updatePlayerUI() {
     currentTrackName.classList.remove('playing');
   }
   
+  // Update selected track in dropdown
+  updateSelectedTrackOption();
+  
   // Enable/disable play button
   playPauseBtn.disabled = !currentTrack;
 }
@@ -514,10 +518,29 @@ function updatePlaybackModeUI() {
 }
 
 function getAvailableTracks() {
-  const options = Array.from(trackSelect.options);
-  return options
-    .filter(opt => opt.value && opt.value !== '')
-    .map(opt => opt.value);
+  const trackOptions = trackDropdown.querySelectorAll('.track-option');
+  return Array.from(trackOptions).map(opt => opt.dataset.path);
+}
+
+function toggleDropdown() {
+  trackDropdown.classList.toggle('show');
+  trackSelectorBtn.classList.toggle('active');
+}
+
+function closeDropdown() {
+  trackDropdown.classList.remove('show');
+  trackSelectorBtn.classList.remove('active');
+}
+
+function updateSelectedTrackOption() {
+  const trackOptions = trackDropdown.querySelectorAll('.track-option');
+  trackOptions.forEach(opt => {
+    if (opt.dataset.path === currentTrack) {
+      opt.classList.add('selected');
+    } else {
+      opt.classList.remove('selected');
+    }
+  });
 }
 
 function getCurrentTrackIndex() {
@@ -699,7 +722,6 @@ async function loadMusicPlayerState() {
   
   // Restore track selection
   if (musicTrack) {
-    trackSelect.value = musicTrack;
     loadTrack(musicTrack);
     
     // Restore playback state
@@ -716,8 +738,26 @@ async function loadMusicPlayerState() {
 }
 
 // Music player event listeners
-trackSelect.addEventListener('change', (e) => {
-  loadTrack(e.target.value);
+trackSelectorBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleDropdown();
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.track-selector-wrapper')) {
+    closeDropdown();
+  }
+});
+
+// Handle track option clicks
+trackDropdown.addEventListener('click', (e) => {
+  const trackOption = e.target.closest('.track-option');
+  if (trackOption) {
+    const trackPath = trackOption.dataset.path;
+    loadTrack(trackPath);
+    closeDropdown();
+  }
 });
 
 playPauseBtn.addEventListener('click', () => {
