@@ -11,15 +11,14 @@ const DEFAULT_BLOCKED_SITES = [
   'snapchat.com',
   'pinterest.com',
   'linkedin.com',
-  // Streaming services
+
+  // Streaming and video
   'netflix.com',
   'hulu.com',
   'disneyplus.com',
-  'disney.com',
   'primevideo.com',
   'hbomax.com',
   'max.com',
-  'paramountplus.com',
   'peacocktv.com',
   'peacock.com',
   'appletv.com',
@@ -28,6 +27,8 @@ const DEFAULT_BLOCKED_SITES = [
   'funimation.com',
   'vrv.co',
   'twitch.tv',
+
+  // Music and audio
   'spotify.com',
   'soundcloud.com',
   'pandora.com',
@@ -37,18 +38,23 @@ const DEFAULT_BLOCKED_SITES = [
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
   const result = await chrome.storage.local.get(['blockedSites', 'isBlocking', 'endTime']);
-  
+
   if (!result.blockedSites) {
     await chrome.storage.local.set({ blockedSites: DEFAULT_BLOCKED_SITES });
   }
-  
+
   await updateBlockingRules();
+  await scheduleBlockEndAlarm();
 });
 
 // Update blocking rules based on current state
 async function updateBlockingRules() {
-  const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
-  
+  const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get([
+    'isBlocking',
+    'endTime',
+    'blockedSites'
+  ]);
+
   // Remove existing rules
   const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
   const ruleIds = existingRules.map(rule => rule.id);
@@ -57,12 +63,12 @@ async function updateBlockingRules() {
       removeRuleIds: ruleIds
     });
   }
-  
+
   // Check if blocking should be active
   const now = Date.now();
   const shouldBlock = isBlocking && endTime && now < endTime;
-  
-  if (shouldBlock && blockedSites) {
+
+  if (shouldBlock && blockedSites && blockedSites.length > 0) {
     // Add blocking rules for each site
     const rules = blockedSites.map((site, index) => ({
       id: index + 1,
@@ -78,10 +84,23 @@ async function updateBlockingRules() {
         resourceTypes: ['main_frame']
       }
     }));
-    
+
     await chrome.declarativeNetRequest.updateDynamicRules({
       addRules: rules
     });
+  }
+}
+
+// Keep the alarm in sync with the current session end time
+async function scheduleBlockEndAlarm() {
+  const { isBlocking, endTime } = await chrome.storage.local.get(['isBlocking', 'endTime']);
+
+  // Clear any previous alarm for safety
+  await chrome.alarms.clear('checkBlockEnd');
+
+  // If there is an active session, schedule an alarm exactly at endTime
+  if (isBlocking && endTime) {
+    chrome.alarms.create('checkBlockEnd', { when: endTime });
   }
 }
 
@@ -114,10 +133,10 @@ async function restoreBlockedTabs() {
   try {
     const { blockedTabUrls } = await chrome.storage.local.get(['blockedTabUrls']);
     if (!blockedTabUrls) return;
-    
+
     const blockedUrl = chrome.runtime.getURL('blocked.html');
     const tabs = await chrome.tabs.query({});
-    
+
     for (const tab of tabs) {
       if (tab.url && tab.url.includes('blocked.html')) {
         const originalUrl = blockedTabUrls[tab.id];
@@ -127,12 +146,12 @@ async function restoreBlockedTabs() {
             // Remove from storage after restoring
             delete blockedTabUrls[tab.id];
           } catch (e) {
-            console.log('Could not restore tab:', e);
+            console.log('Could not restore tab:', tab.url);
           }
         }
       }
     }
-    
+
     // Update storage with cleaned up URLs
     await chrome.storage.local.set({ blockedTabUrls });
   } catch (e) {
@@ -142,27 +161,31 @@ async function restoreBlockedTabs() {
 
 // Redirect existing tabs that are on blocked sites
 async function redirectExistingTabs() {
-  const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
-  
+  const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get([
+    'isBlocking',
+    'endTime',
+    'blockedSites'
+  ]);
+
   if (!isBlocking || !endTime || !blockedSites) return;
-  
+
   const now = Date.now();
   if (now >= endTime) return;
-  
+
   try {
     const tabs = await chrome.tabs.query({});
     const blockedUrl = chrome.runtime.getURL('blocked.html');
-    
+
     for (const tab of tabs) {
       if (tab.url && isBlockedSite(tab.url, blockedSites)) {
-        // Only redirect if it's not already the blocked page
+        // Only redirect if it is not already the blocked page
         if (!tab.url.includes('blocked.html')) {
           try {
             // Store original URL before redirecting
             await storeOriginalUrl(tab.id, tab.url);
             await chrome.tabs.update(tab.id, { url: blockedUrl });
           } catch (e) {
-            // Ignore errors (e.g., chrome:// pages can't be redirected)
+            // Ignore errors for pages that cannot be redirected
             console.log('Could not redirect tab:', tab.url);
           }
         }
@@ -178,7 +201,7 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
   if (areaName === 'local') {
     if (changes.isBlocking || changes.endTime || changes.blockedSites) {
       await updateBlockingRules();
-      
+
       // If blocking just started, redirect existing tabs
       if (changes.isBlocking && changes.isBlocking.newValue === true) {
         // Small delay to ensure blocking rules are updated first
@@ -186,15 +209,18 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
           redirectExistingTabs();
         }, 100);
       }
-      
+
       // If blocking just ended, restore tabs
       if (changes.isBlocking && changes.isBlocking.newValue === false) {
         await restoreBlockedTabs();
       }
-      
+
       // If blocked sites changed during active session, redirect any newly blocked tabs
       if (changes.blockedSites) {
-        const { isBlocking, endTime } = await chrome.storage.local.get(['isBlocking', 'endTime']);
+        const { isBlocking, endTime } = await chrome.storage.local.get([
+          'isBlocking',
+          'endTime'
+        ]);
         if (isBlocking && endTime) {
           const now = Date.now();
           if (now < endTime) {
@@ -204,23 +230,31 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
           }
         }
       }
+
+      // Keep alarm synced with any change to state or end time
+      if (changes.isBlocking || changes.endTime) {
+        await scheduleBlockEndAlarm();
+      }
     }
   }
 });
 
 // Check if blocking period has ended
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === 'checkBlockEnd') {
-    const { endTime, isBlocking } = await chrome.storage.local.get(['endTime', 'isBlocking']);
+    const { endTime, isBlocking } = await chrome.storage.local.get([
+      'endTime',
+      'isBlocking'
+    ]);
     const now = Date.now();
-    
+
     if (isBlocking && endTime && now >= endTime) {
       await chrome.storage.local.set({ isBlocking: false, endTime: null });
       await updateBlockingRules();
-      
+
       // Restore blocked tabs to their original URLs
       await restoreBlockedTabs();
-      
+
       // Show notification
       chrome.notifications.create({
         type: 'basic',
@@ -232,14 +266,15 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-// Periodic check every minute
-chrome.alarms.create('checkBlockEnd', { periodInMinutes: 1 });
-
 // Listen for tab updates to catch any navigation to blocked sites
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'loading' && tab.url) {
-    const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
-    
+    const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get([
+      'isBlocking',
+      'endTime',
+      'blockedSites'
+    ]);
+
     if (isBlocking && endTime && blockedSites) {
       const now = Date.now();
       if (now < endTime && isBlockedSite(tab.url, blockedSites)) {
@@ -250,7 +285,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           await storeOriginalUrl(tabId, tab.url);
           await chrome.tabs.update(tabId, { url: blockedUrl });
         } catch (e) {
-          // Ignore errors for pages that can't be redirected
+          // Ignore errors for pages that cannot be redirected
           console.log('Could not redirect tab:', tab.url);
         }
       }
@@ -259,7 +294,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 // Clean up stored URLs when tabs are closed
-chrome.tabs.onRemoved.addListener(async (tabId) => {
+chrome.tabs.onRemoved.addListener(async tabId => {
   try {
     const { blockedTabUrls } = await chrome.storage.local.get(['blockedTabUrls']);
     if (blockedTabUrls && blockedTabUrls[tabId]) {
