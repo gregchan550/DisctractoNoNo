@@ -12,6 +12,33 @@ const addSiteBtn = document.getElementById('addSiteBtn');
 const presetButtons = document.querySelectorAll('.preset-btn');
 const autocompleteList = document.getElementById('autocompleteList');
 
+// Music player DOM elements
+const trackSelect = document.getElementById('trackSelect');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const playPauseIcon = document.getElementById('playPauseIcon');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const playbackModeBtn = document.getElementById('playbackModeBtn');
+const playbackModeIcon = document.getElementById('playbackModeIcon');
+const modeTooltip = document.getElementById('modeTooltip');
+const volumeBtn = document.getElementById('volumeBtn');
+const volumeIcon = document.getElementById('volumeIcon');
+const volumeSlider = document.getElementById('volumeSlider');
+const volumeValue = document.getElementById('volumeValue');
+const volumePopup = document.getElementById('volumePopup');
+const currentTrackName = document.getElementById('currentTrackName');
+const currentTime = document.getElementById('currentTime');
+const duration = document.getElementById('duration');
+const progressBar = document.getElementById('progressBar');
+
+// Music player state
+let audioPlayer = null;
+let currentTrack = null;
+let isPlaying = false;
+let volume = 50;
+let playbackMode = 'order'; // 'loop', 'shuffle', 'order'
+let progressUpdateInterval = null;
+
 // Common sites for autocomplete
 const COMMON_SITES = [
   'youtube.com', 'instagram.com', 'facebook.com', 'twitter.com', 'x.com',
@@ -77,6 +104,9 @@ async function loadState() {
   updateUI(isBlocking, endTime);
   renderSites(blockedSites || []);
   updatePresetButtons();
+  
+  // Load music player state
+  await loadMusicPlayerState();
   
   // Update timer every second if blocking is active
   if (isBlocking && endTime) {
@@ -338,6 +368,384 @@ document.addEventListener('click', (e) => {
 newSiteInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter' && selectedAutocompleteIndex === -1) {
     addSiteBtn.click();
+  }
+});
+
+// Music player functions
+function formatTime(seconds) {
+  if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function getTrackNameFromPath(path) {
+  if (!path) return 'No track selected';
+  const parts = path.split('/');
+  const filename = parts[parts.length - 1];
+  return filename.replace('.mp3', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function updateProgress() {
+  if (!audioPlayer) {
+    currentTime.textContent = '0:00';
+    duration.textContent = '0:00';
+    progressBar.value = 0;
+    return;
+  }
+  
+  const current = audioPlayer.currentTime || 0;
+  const total = audioPlayer.duration || 0;
+  
+  currentTime.textContent = formatTime(current);
+  duration.textContent = formatTime(total);
+  
+  if (total > 0) {
+    const percent = (current / total) * 100;
+    progressBar.value = percent;
+  } else {
+    progressBar.value = 0;
+  }
+}
+
+function startProgressTracking() {
+  if (progressUpdateInterval) {
+    clearInterval(progressUpdateInterval);
+  }
+  progressUpdateInterval = setInterval(updateProgress, 100);
+}
+
+function stopProgressTracking() {
+  if (progressUpdateInterval) {
+    clearInterval(progressUpdateInterval);
+    progressUpdateInterval = null;
+  }
+}
+
+function updatePlayerUI() {
+  // Update play/pause button
+  if (isPlaying) {
+    playPauseIcon.textContent = '⏸';
+    playPauseBtn.setAttribute('title', 'Pause');
+  } else {
+    playPauseIcon.textContent = '▶';
+    playPauseBtn.setAttribute('title', 'Play');
+  }
+  
+  // Update current track display
+  const trackName = getTrackNameFromPath(currentTrack);
+  currentTrackName.textContent = trackName;
+  if (isPlaying && currentTrack) {
+    currentTrackName.classList.add('playing');
+  } else {
+    currentTrackName.classList.remove('playing');
+  }
+  
+  // Enable/disable play button
+  playPauseBtn.disabled = !currentTrack;
+}
+
+function setVolume(vol) {
+  volume = Math.max(0, Math.min(100, vol));
+  volumeSlider.value = volume;
+  volumeValue.textContent = `${volume}%`;
+  
+  if (audioPlayer) {
+    audioPlayer.volume = volume / 100;
+  }
+  
+  // Update volume icon
+  if (volume === 0) {
+    volumeIcon.textContent = '🔇';
+  } else if (volume < 50) {
+    volumeIcon.textContent = '🔉';
+  } else {
+    volumeIcon.textContent = '🔊';
+  }
+  
+  // Save volume to storage
+  chrome.storage.local.set({ musicVolume: volume });
+}
+
+function togglePlaybackMode() {
+  const modes = ['order', 'loop', 'shuffle'];
+  const currentIndex = modes.indexOf(playbackMode);
+  const nextIndex = (currentIndex + 1) % modes.length;
+  playbackMode = modes[nextIndex];
+  
+  // Update icon and tooltip
+  if (playbackMode === 'loop') {
+    playbackModeIcon.textContent = '🔁';
+    modeTooltip.textContent = 'Loop';
+    playbackModeBtn.setAttribute('title', 'Loop');
+  } else if (playbackMode === 'shuffle') {
+    playbackModeIcon.textContent = '🔀';
+    modeTooltip.textContent = 'Shuffle';
+    playbackModeBtn.setAttribute('title', 'Shuffle');
+  } else {
+    playbackModeIcon.textContent = '→';
+    modeTooltip.textContent = 'In Order';
+    playbackModeBtn.setAttribute('title', 'In Order');
+  }
+  
+  // Update audio player loop based on mode
+  if (audioPlayer) {
+    audioPlayer.loop = playbackMode === 'loop';
+  }
+  
+  // Save to storage
+  chrome.storage.local.set({ playbackMode: playbackMode });
+}
+
+function updatePlaybackModeUI() {
+  if (playbackMode === 'loop') {
+    playbackModeIcon.textContent = '🔁';
+    modeTooltip.textContent = 'Loop';
+    playbackModeBtn.setAttribute('title', 'Loop');
+  } else if (playbackMode === 'shuffle') {
+    playbackModeIcon.textContent = '🔀';
+    modeTooltip.textContent = 'Shuffle';
+    playbackModeBtn.setAttribute('title', 'Shuffle');
+  } else {
+    playbackModeIcon.textContent = '→';
+    modeTooltip.textContent = 'In Order';
+    playbackModeBtn.setAttribute('title', 'In Order');
+  }
+}
+
+function getAvailableTracks() {
+  const options = Array.from(trackSelect.options);
+  return options
+    .filter(opt => opt.value && opt.value !== '')
+    .map(opt => opt.value);
+}
+
+function getCurrentTrackIndex() {
+  const tracks = getAvailableTracks();
+  return tracks.indexOf(currentTrack);
+}
+
+function skipToNext() {
+  const tracks = getAvailableTracks();
+  if (tracks.length === 0) return;
+  
+  if (playbackMode === 'shuffle') {
+    // Random track
+    const randomIndex = Math.floor(Math.random() * tracks.length);
+    loadTrack(tracks[randomIndex]);
+  } else {
+    // Next track in order
+    const currentIndex = getCurrentTrackIndex();
+    const nextIndex = (currentIndex + 1) % tracks.length;
+    loadTrack(tracks[nextIndex]);
+  }
+}
+
+function skipToPrevious() {
+  const tracks = getAvailableTracks();
+  if (tracks.length === 0) return;
+  
+  if (playbackMode === 'shuffle') {
+    // Random track
+    const randomIndex = Math.floor(Math.random() * tracks.length);
+    loadTrack(tracks[randomIndex]);
+  } else {
+    // Previous track in order
+    const currentIndex = getCurrentTrackIndex();
+    const prevIndex = (currentIndex - 1 + tracks.length) % tracks.length;
+    loadTrack(tracks[prevIndex]);
+  }
+}
+
+function loadTrack(trackPath) {
+  if (!trackPath) {
+    // Stop current track
+    stopProgressTracking();
+    if (audioPlayer) {
+      audioPlayer.pause();
+      audioPlayer = null;
+    }
+    currentTrack = null;
+    isPlaying = false;
+    updatePlayerUI();
+    updateProgress();
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    chrome.storage.local.set({ musicTrack: null, musicPlaying: false });
+    return;
+  }
+  
+  const wasPlaying = isPlaying;
+  
+  // Stop current track if playing
+  if (audioPlayer) {
+    audioPlayer.pause();
+    audioPlayer = null;
+  }
+  
+  // Load new track
+  currentTrack = trackPath;
+  const trackUrl = chrome.runtime.getURL(trackPath);
+  audioPlayer = new Audio(trackUrl);
+  audioPlayer.loop = playbackMode === 'loop';
+  audioPlayer.volume = volume / 100;
+  
+  // Handle errors
+  audioPlayer.addEventListener('error', (e) => {
+    console.error('Error loading audio:', e);
+    currentTrackName.textContent = 'Error loading track';
+    playPauseBtn.disabled = true;
+    stopProgressTracking();
+  });
+  
+  // Update duration when metadata loads
+  audioPlayer.addEventListener('loadedmetadata', () => {
+    updateProgress();
+  });
+  
+  // Handle track end
+  audioPlayer.addEventListener('ended', () => {
+    if (playbackMode !== 'loop') {
+      isPlaying = false;
+      updatePlayerUI();
+      stopProgressTracking();
+      chrome.storage.local.set({ musicPlaying: false });
+      
+      // Auto-play next track if not in order mode or if in shuffle mode
+      if (playbackMode === 'shuffle' || playbackMode === 'order') {
+        skipToNext();
+        if (audioPlayer) {
+          playTrack();
+        }
+      }
+    }
+  });
+  
+  // Update progress when time updates
+  audioPlayer.addEventListener('timeupdate', updateProgress);
+  
+  // Enable skip buttons if there are multiple tracks
+  const tracks = getAvailableTracks();
+  prevBtn.disabled = tracks.length <= 1;
+  nextBtn.disabled = tracks.length <= 1;
+  
+  // Update UI
+  updatePlayerUI();
+  updateProgress();
+  
+  // Save to storage
+  chrome.storage.local.set({ musicTrack: trackPath, musicPlaying: false });
+  
+  // If was playing, start new track
+  if (wasPlaying) {
+    playTrack();
+  }
+}
+
+function playTrack() {
+  if (!audioPlayer || !currentTrack) return;
+  
+  audioPlayer.play().then(() => {
+    isPlaying = true;
+    updatePlayerUI();
+    startProgressTracking();
+    chrome.storage.local.set({ musicPlaying: true });
+  }).catch((error) => {
+    console.error('Error playing audio:', error);
+    isPlaying = false;
+    updatePlayerUI();
+    stopProgressTracking();
+  });
+}
+
+function pauseTrack() {
+  if (!audioPlayer) return;
+  
+  audioPlayer.pause();
+  isPlaying = false;
+  updatePlayerUI();
+  stopProgressTracking();
+  chrome.storage.local.set({ musicPlaying: false });
+}
+
+function togglePlayPause() {
+  if (isPlaying) {
+    pauseTrack();
+  } else {
+    playTrack();
+  }
+}
+
+async function loadMusicPlayerState() {
+  const { musicTrack, musicPlaying, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
+    'musicTrack',
+    'musicPlaying',
+    'musicVolume',
+    'playbackMode'
+  ]);
+  
+  // Restore playback mode
+  if (savedMode) {
+    playbackMode = savedMode;
+  }
+  updatePlaybackModeUI();
+  
+  // Restore volume
+  if (musicVolume !== undefined) {
+    setVolume(musicVolume);
+  } else {
+    setVolume(50);
+  }
+  
+  // Restore track selection
+  if (musicTrack) {
+    trackSelect.value = musicTrack;
+    loadTrack(musicTrack);
+    
+    // Restore playback state
+    if (musicPlaying) {
+      // Small delay to ensure audio is loaded
+      setTimeout(() => {
+        playTrack();
+      }, 100);
+    }
+  } else {
+    updatePlayerUI();
+    updateProgress();
+  }
+}
+
+// Music player event listeners
+trackSelect.addEventListener('change', (e) => {
+  loadTrack(e.target.value);
+});
+
+playPauseBtn.addEventListener('click', () => {
+  togglePlayPause();
+});
+
+prevBtn.addEventListener('click', () => {
+  skipToPrevious();
+});
+
+nextBtn.addEventListener('click', () => {
+  skipToNext();
+});
+
+playbackModeBtn.addEventListener('click', () => {
+  togglePlaybackMode();
+});
+
+volumeSlider.addEventListener('input', (e) => {
+  setVolume(parseInt(e.target.value));
+});
+
+// Progress bar seeking
+progressBar.addEventListener('input', (e) => {
+  if (audioPlayer && audioPlayer.duration) {
+    const percent = parseFloat(e.target.value);
+    audioPlayer.currentTime = (percent / 100) * audioPlayer.duration;
+    updateProgress();
   }
 });
 

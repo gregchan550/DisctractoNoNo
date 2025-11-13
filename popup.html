@@ -45,6 +45,74 @@
 
     <div class="divider"></div>
 
+    <div class="music-player">
+      <h3>Focus Sounds</h3>
+      <div class="player-controls">
+        <div class="track-selector">
+          <label for="trackSelect">Select Sound:</label>
+          <select id="trackSelect" class="track-select">
+            <option value="">-- Choose a sound --</option>
+            <optgroup label="Ambient">
+              <option value="sounds/ambient/white-noise.mp3">White Noise</option>
+              <option value="sounds/ambient/brown-noise.mp3">Brown Noise</option>
+              <option value="sounds/ambient/pink-noise.mp3">Pink Noise</option>
+              <option value="sounds/ambient/coffee-shop.mp3">Coffee Shop</option>
+            </optgroup>
+            <optgroup label="Nature">
+              <option value="sounds/nature/rain.mp3">Rain</option>
+              <option value="sounds/nature/forest.mp3">Forest</option>
+              <option value="sounds/nature/ocean-waves.mp3">Ocean Waves</option>
+              <option value="sounds/nature/thunderstorm.mp3">Thunderstorm</option>
+              <option value="sounds/nature/birds.mp3">Birds</option>
+            </optgroup>
+            <optgroup label="Focus">
+              <option value="sounds/focus/binaural-beats.mp3">Binaural Beats</option>
+              <option value="sounds/focus/deep-focus.mp3">Deep Focus</option>
+              <option value="sounds/focus/concentration.mp3">Concentration</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="current-track">
+          <span id="currentTrackName" class="track-name">No track selected</span>
+        </div>
+        <div class="progress-section">
+          <span id="currentTime" class="time-display">0:00</span>
+          <div class="progress-bar-container">
+            <input type="range" id="progressBar" min="0" max="100" value="0" class="progress-bar">
+          </div>
+          <span id="duration" class="time-display">0:00</span>
+        </div>
+        <div class="playback-controls">
+          <button id="playbackModeBtn" class="btn btn-mode" title="In Order">
+            <span id="playbackModeIcon">→</span>
+            <span class="mode-tooltip" id="modeTooltip">In Order</span>
+          </button>
+          <div class="controls-center">
+            <button id="prevBtn" class="btn btn-skip" disabled>
+              <span>⏮</span>
+            </button>
+            <button id="playPauseBtn" class="btn btn-play-pause" disabled>
+              <span id="playPauseIcon">▶</span>
+            </button>
+            <button id="nextBtn" class="btn btn-skip" disabled>
+              <span>⏭</span>
+            </button>
+          </div>
+          <div class="volume-control-wrapper">
+            <button id="volumeBtn" class="btn btn-volume" title="Volume">
+              <span id="volumeIcon">🔊</span>
+            </button>
+            <div class="volume-popup" id="volumePopup">
+              <input type="range" id="volumeSlider" min="0" max="100" value="50" class="volume-slider-vertical" orient="vertical">
+              <span id="volumeValue" class="volume-value">50%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
     <div class="blocked-sites">
       <h3>Blocked Sites</h3>
       <div id="sitesList" class="sites-list"></div>
