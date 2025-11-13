@@ -25,10 +25,11 @@ const COMMON_SITES = [
 
 // Update preset button active states
 function updatePresetButtons() {
-  const currentValue = parseInt(durationSelect.value) || 30;
+  const currentValue = parseFloat(durationSelect.value) || 30;
   presetButtons.forEach(btn => {
-    const btnMinutes = parseInt(btn.dataset.minutes);
-    if (btnMinutes === currentValue) {
+    const btnMinutes = parseFloat(btn.dataset.minutes);
+    // Use a small epsilon for floating point comparison
+    if (Math.abs(btnMinutes - currentValue) < 0.001) {
       btn.classList.add('active');
     } else {
       btn.classList.remove('active');
@@ -40,7 +41,7 @@ function updatePresetButtons() {
 presetButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     if (durationSelect.disabled) return; // Don't allow changes during active session
-    const minutes = parseInt(btn.dataset.minutes);
+    const minutes = parseFloat(btn.dataset.minutes);
     durationSelect.value = minutes;
     updatePresetButtons();
   });
@@ -172,9 +173,9 @@ async function renderSites(sites) {
 startBtn.addEventListener('click', async () => {
   let minutes = parseFloat(durationSelect.value);
   
-  // Validate - allow minimum of 5 seconds (0.083 minutes) for testing
-  if (isNaN(minutes) || minutes < 0.083) {
-    minutes = 0.083;
+  // Validate - minimum of 5 minutes
+  if (isNaN(minutes) || minutes < 5) {
+    minutes = 5;
   } else if (minutes > 240) {
     minutes = 240;
   }
