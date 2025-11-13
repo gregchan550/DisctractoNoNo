@@ -11,6 +11,26 @@
       box-sizing: border-box;
     }
     
+    :root {
+      /* Light mode colors (default) */
+      --bg-primary: white;
+      --bg-secondary: #f8f9fa;
+      --text-primary: #333;
+      --text-secondary: #666;
+      --text-tertiary: #555;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        /* Dark mode colors */
+        --bg-primary: #1e1e1e;
+        --bg-secondary: #2d2d2d;
+        --text-primary: #e0e0e0;
+        --text-secondary: #d0d0d0;
+        --text-tertiary: #c0c0c0;
+      }
+    }
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -22,7 +42,7 @@
     }
     
     .container {
-      background: white;
+      background: var(--bg-primary);
       border-radius: 20px;
       padding: 60px 40px;
       text-align: center;
@@ -37,13 +57,13 @@
     
     h1 {
       font-size: 32px;
-      color: #333;
+      color: var(--text-primary);
       margin-bottom: 15px;
     }
     
     p {
       font-size: 16px;
-      color: #666;
+      color: var(--text-secondary);
       line-height: 1.6;
       margin-bottom: 30px;
     }
@@ -56,12 +76,27 @@
     }
     
     .motivational {
-      margin-top: 30px;
-      padding: 20px;
-      background: #f8f9fa;
-      border-radius: 10px;
+      margin-top: 40px;
+      padding: 30px 25px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
       font-style: italic;
-      color: #555;
+      color: var(--text-primary);
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 1.7;
+      border-left: 4px solid #667eea;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .motivational span {
+      color: var(--text-secondary);
+      font-size: 16px;
+      font-weight: 600;
+      font-style: normal;
+      display: block;
+      margin-top: 15px;
+      opacity: 0.9;
     }
   </style>
 </head>
@@ -69,11 +104,9 @@
   <div class="container">
     <div class="icon">🚫</div>
     <h1>Site Blocked</h1>
-    <p>This site is blocked during your focus session. Stay focused and get your work done!</p>
+    <p>Site's blocked! Get back to work!</p>
     <div id="timer" class="timer"></div>
-    <div class="motivational">
-      "The way to get started is to quit talking and begin doing." - Walt Disney
-    </div>
+    <div class="motivational"></div>
   </div>
   
   <script src="blocked.js"></script>

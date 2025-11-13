@@ -170,11 +170,11 @@ async function renderSites(sites) {
 
 // Start focus session or extend current session
 startBtn.addEventListener('click', async () => {
-  let minutes = parseInt(durationSelect.value);
+  let minutes = parseFloat(durationSelect.value);
   
-  // Validate without rounding - use whatever user types
-  if (isNaN(minutes) || minutes < 1) {
-    minutes = 1;
+  // Validate - allow minimum of 5 seconds (0.083 minutes) for testing
+  if (isNaN(minutes) || minutes < 0.083) {
+    minutes = 0.083;
   } else if (minutes > 240) {
     minutes = 240;
   }
