@@ -12,3 +12,7 @@ Thumbs.db
 *.log
 create-icons.html
 
+# Large source icon files
+icons/newicon.png
+icons/newicon.jpg
+
