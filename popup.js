@@ -29,7 +29,7 @@ const volumeValue = document.getElementById('volumeValue');
 const volumePopup = document.getElementById('volumePopup');
 const currentTrackName = document.getElementById('currentTrackName');
 const currentTime = document.getElementById('currentTime');
-const duration = document.getElementById('duration');
+const duration = document.getElementById('audioDuration');
 const progressBar = document.getElementById('progressBar');
 
 // Music player state (synced from offscreen via messages)

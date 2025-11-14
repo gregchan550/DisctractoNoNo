@@ -306,40 +306,38 @@ chrome.tabs.onRemoved.addListener(async tabId => {
   }
 });
 
-// Offscreen document helper
+//
+// Offscreen audio support
+//
+
+// Create or reuse the offscreen document used for audio playback
 async function ensureOffscreenDocument() {
   try {
-    // Try to create offscreen document
-    // If it already exists, this will throw an error which we'll catch
-    await chrome.offscreen.createDocument({
-      url: 'offscreen.html',
-      reasons: ['AUDIO_PLAYBACK'],
-      justification: 'Audio playback for focus sounds'
-    });
+    const hasDoc = await chrome.offscreen.hasDocument();
+    if (!hasDoc) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['AUDIO_PLAYBACK'],
+        justification: 'Audio playback for focus sounds while the popup is closed'
+      });
+    }
   } catch (error) {
-    // Document already exists or other error - that's okay
-    // We can proceed as if it exists
+    // If creation fails for any reason, log and continue
+    console.error('Error ensuring offscreen document:', error);
   }
 }
 
-// Message routing: Handle audio commands and route them to offscreen document
+// Route audio commands from popup to the offscreen page
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Only handle messages from popup (not from offscreen to avoid loops)
-  // Offscreen messages have sender.url containing 'offscreen.html'
-  if (sender.url && sender.url.includes('offscreen.html')) {
-    // This is a message from offscreen - let it pass through (state updates)
-    // Don't forward back to offscreen to avoid loops
-    return false;
-  }
-  
-  // Only forward AUDIO_* commands that come from popup
-  // Check that sender is popup (not background itself or other contexts)
-  const isFromPopup = sender.url && (sender.url.includes('popup.html') || sender.url.includes('popup'));
-  
-  // Handle AUDIO_* commands from popup - route to offscreen
-  if (message.command && message.command.startsWith('AUDIO_') && isFromPopup) {
+  // Ignore messages coming from offscreen itself
+  const fromOffscreen = sender.url && sender.url.includes('offscreen.html');
+
+  // Audio commands always use the AUDIO_* convention
+  if (!fromOffscreen && message && typeof message.command === 'string' &&
+      message.command.startsWith('AUDIO_')) {
+
     ensureOffscreenDocument().then(() => {
-      // Forward message to offscreen document and relay response back to popup
+      // Forward the command so offscreen.js can handle it
       chrome.runtime.sendMessage(message, (response) => {
         if (sendResponse) {
           if (chrome.runtime.lastError) {
@@ -349,16 +347,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
       });
-    }).catch((error) => {
+    }).catch(err => {
       if (sendResponse) {
-        sendResponse({ success: false, error: error.message });
+        sendResponse({ success: false, error: err.message });
       }
     });
-    return true; // Keep message channel open for async response
+
+    // Keep the channel open while we wait for offscreen to respond
+    return true;
   }
-  
-  // State updates from offscreen will be received by popup directly
-  // No need to forward them here
-  
+
+  // For state updates from offscreen (AUDIO_STATE_UPDATE) we do nothing here.
+  // They are broadcast to all contexts and popup.js listens for them directly.
+
   return false;
 });
