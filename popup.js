@@ -51,6 +51,55 @@ const COMMON_SITES = [
   'slack.com', 'zoom.us', 'teams.microsoft.com', 'outlook.com', 'gmail.com'
 ];
 
+// Helper function to safely access chrome.storage
+function safeStorageGet(keys, callback) {
+  if (!chrome || !chrome.storage || !chrome.storage.local) {
+    console.warn('chrome.storage.local is not available');
+    if (callback) {
+      callback({});
+    }
+    return Promise.resolve({});
+  }
+  
+  try {
+    if (callback) {
+      chrome.storage.local.get(keys, (result) => {
+        if (chrome.runtime.lastError) {
+          console.error('Storage get error:', chrome.runtime.lastError);
+          callback({});
+        } else {
+          callback(result);
+        }
+      });
+      return Promise.resolve({});
+    } else {
+      return chrome.storage.local.get(keys).catch((error) => {
+        console.error('Storage get error:', error);
+        return {};
+      });
+    }
+  } catch (error) {
+    console.error('Storage access error:', error);
+    if (callback) {
+      callback({});
+    }
+    return Promise.resolve({});
+  }
+}
+
+async function safeStorageSet(items) {
+  if (!chrome || !chrome.storage || !chrome.storage.local) {
+    console.warn('chrome.storage.local is not available');
+    return Promise.resolve();
+  }
+  
+  try {
+    await chrome.storage.local.set(items);
+  } catch (error) {
+    console.error('Storage set error:', error);
+  }
+}
+
 // Update preset button active states
 function updatePresetButtons() {
   const currentValue = parseFloat(durationSelect.value) || 30;
@@ -100,7 +149,7 @@ durationSelect.addEventListener('input', updatePresetButtons);
 
 // Load initial state
 async function loadState() {
-  const { isBlocking, endTime, blockedSites } = await chrome.storage.local.get(['isBlocking', 'endTime', 'blockedSites']);
+  const { isBlocking, endTime, blockedSites } = await safeStorageGet(['isBlocking', 'endTime', 'blockedSites']);
   
   updateUI(isBlocking, endTime);
   renderSites(blockedSites || []);
@@ -131,7 +180,7 @@ function updateUI(isBlocking, endTime) {
     newSiteInput.disabled = false;
     addSiteBtn.disabled = false;
     // Re-render sites
-    chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
+    safeStorageGet(['blockedSites'], ({ blockedSites }) => {
       renderSites(blockedSites || []);
     });
   } else {
@@ -148,14 +197,14 @@ function updateUI(isBlocking, endTime) {
     newSiteInput.disabled = false;
     addSiteBtn.disabled = false;
     // Re-render sites
-    chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
+    safeStorageGet(['blockedSites'], ({ blockedSites }) => {
       renderSites(blockedSites || []);
     });
   }
 }
 
 function updateTimer() {
-  chrome.storage.local.get(['endTime', 'isBlocking'], ({ endTime, isBlocking }) => {
+  safeStorageGet(['endTime', 'isBlocking'], ({ endTime, isBlocking }) => {
     if (!isBlocking || !endTime) {
       updateUI(false, null);
       return;
@@ -192,9 +241,9 @@ async function renderSites(sites) {
   sitesList.querySelectorAll('.remove-site').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const siteToRemove = e.target.dataset.site;
-      const { blockedSites } = await chrome.storage.local.get(['blockedSites']);
-      const updated = blockedSites.filter(s => s !== siteToRemove);
-      await chrome.storage.local.set({ blockedSites: updated });
+      const { blockedSites } = await safeStorageGet(['blockedSites']);
+      const updated = (blockedSites || []).filter(s => s !== siteToRemove);
+      await safeStorageSet({ blockedSites: updated });
       renderSites(updated);
     });
   });
@@ -215,7 +264,7 @@ startBtn.addEventListener('click', async () => {
   durationSelect.value = minutes;
   updatePresetButtons();
   
-  const { isBlocking, endTime: currentEndTime } = await chrome.storage.local.get(['isBlocking', 'endTime']);
+  const { isBlocking, endTime: currentEndTime } = await safeStorageGet(['isBlocking', 'endTime']);
   
   let newEndTime;
   if (isBlocking && currentEndTime) {
@@ -228,7 +277,7 @@ startBtn.addEventListener('click', async () => {
     newEndTime = Date.now() + (minutes * 60 * 1000);
   }
   
-  await chrome.storage.local.set({
+  await safeStorageSet({
     isBlocking: true,
     endTime: newEndTime
   });
@@ -253,9 +302,9 @@ addSiteBtn.addEventListener('click', async () => {
     return;
   }
   
-  const { blockedSites } = await chrome.storage.local.get(['blockedSites']);
-  const updated = [...new Set([...blockedSites, cleanSite])];
-  await chrome.storage.local.set({ blockedSites: updated });
+  const { blockedSites } = await safeStorageGet(['blockedSites']);
+  const updated = [...new Set([...(blockedSites || []), cleanSite])];
+  await safeStorageSet({ blockedSites: updated });
   
   renderSites(updated);
   newSiteInput.value = '';
@@ -276,7 +325,7 @@ function showAutocomplete(input) {
   }
 
   // Filter common sites and existing blocked sites
-  chrome.storage.local.get(['blockedSites'], ({ blockedSites }) => {
+  safeStorageGet(['blockedSites'], ({ blockedSites }) => {
     const blocked = blockedSites || [];
     const suggestions = COMMON_SITES.filter(site => 
       site.includes(value) && !blocked.includes(site)
@@ -530,7 +579,23 @@ function pauseTrack() {
 function togglePlayPause() {
   chrome.runtime.sendMessage({
     command: 'AUDIO_TOGGLE_PLAY_PAUSE'
-  }).catch(() => {});
+  }).catch((error) => {
+    console.error('Error toggling play/pause:', error);
+  });
+  
+  // Request state update immediately to ensure UI reflects the change
+  // The offscreen will send a state update, but we can also request it
+  setTimeout(() => {
+    chrome.runtime.sendMessage({
+      command: 'AUDIO_GET_STATE'
+    }).then((response) => {
+      if (response && response.success && response.state) {
+        syncUIFromState(response.state);
+      }
+    }).catch(() => {
+      // Ignore errors - state update will come via message listener
+    });
+  }, 50);
 }
 
 async function loadMusicPlayerState() {
@@ -544,7 +609,7 @@ async function loadMusicPlayerState() {
       syncUIFromState(response.state);
     } else {
       // Fallback: load from storage if offscreen not ready
-      const { musicTrack, musicPlaying, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
+      const { musicTrack, musicPlaying, musicVolume, playbackMode: savedMode } = await safeStorageGet([
         'musicTrack',
         'musicPlaying',
         'musicVolume',
@@ -577,7 +642,7 @@ async function loadMusicPlayerState() {
     }
   } catch (error) {
     // Offscreen might not be ready yet, use storage fallback
-    const { musicTrack, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
+    const { musicTrack, musicVolume, playbackMode: savedMode } = await safeStorageGet([
       'musicTrack',
       'musicVolume',
       'playbackMode'
@@ -693,8 +758,12 @@ progressBar.addEventListener('input', (e) => {
 
 // Listen for state updates from offscreen
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'AUDIO_STATE_UPDATE' && message.state) {
-    syncUIFromState(message.state);
+  try {
+    if (message && message.type === 'AUDIO_STATE_UPDATE' && message.state) {
+      syncUIFromState(message.state);
+    }
+  } catch (error) {
+    console.error('Error handling state update:', error);
   }
   return false;
 });

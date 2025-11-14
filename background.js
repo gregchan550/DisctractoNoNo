@@ -332,6 +332,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Ignore messages coming from offscreen itself
   const fromOffscreen = sender.url && sender.url.includes('offscreen.html');
 
+  // Handle state updates from offscreen - forward to popup
+  if (fromOffscreen && message && message.type === 'AUDIO_STATE_UPDATE') {
+    // Forward state update to popup (if open)
+    // chrome.runtime.sendMessage will deliver to any listener, including popup
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Popup might not be open, that's okay
+    });
+    return false;
+  }
+
   // Audio commands always use the AUDIO_* convention
   if (!fromOffscreen && message && typeof message.command === 'string' &&
       message.command.startsWith('AUDIO_')) {
@@ -356,9 +366,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Keep the channel open while we wait for offscreen to respond
     return true;
   }
-
-  // For state updates from offscreen (AUDIO_STATE_UPDATE) we do nothing here.
-  // They are broadcast to all contexts and popup.js listens for them directly.
 
   return false;
 });

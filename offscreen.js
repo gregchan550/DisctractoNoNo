@@ -28,17 +28,24 @@ function sendStateUpdate() {
   };
   
   // Send to background, which will forward to popup
-  chrome.runtime.sendMessage(state).catch(() => {
+  chrome.runtime.sendMessage(state).catch((error) => {
     // Popup might not be open, that's okay
+    console.warn('Could not send state update:', error);
   });
   
   // Also write to storage
-  chrome.storage.local.set({
-    musicTrack: currentTrack,
-    musicPlaying: isPlaying,
-    musicVolume: volume,
-    playbackMode: playbackMode
-  });
+  try {
+    chrome.storage.local.set({
+      musicTrack: currentTrack,
+      musicPlaying: isPlaying,
+      musicVolume: volume,
+      playbackMode: playbackMode
+    }).catch((error) => {
+      console.error('Error saving state to storage:', error);
+    });
+  } catch (error) {
+    console.error('Error accessing storage:', error);
+  }
 }
 
 function formatTime(seconds) {
