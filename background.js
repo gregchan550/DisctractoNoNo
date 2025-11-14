@@ -305,3 +305,60 @@ chrome.tabs.onRemoved.addListener(async tabId => {
     console.error('Error cleaning up tab URL:', e);
   }
 });
+
+// Offscreen document helper
+async function ensureOffscreenDocument() {
+  try {
+    // Try to create offscreen document
+    // If it already exists, this will throw an error which we'll catch
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Audio playback for focus sounds'
+    });
+  } catch (error) {
+    // Document already exists or other error - that's okay
+    // We can proceed as if it exists
+  }
+}
+
+// Message routing: Handle audio commands and route them to offscreen document
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Only handle messages from popup (not from offscreen to avoid loops)
+  // Offscreen messages have sender.url containing 'offscreen.html'
+  if (sender.url && sender.url.includes('offscreen.html')) {
+    // This is a message from offscreen - let it pass through (state updates)
+    // Don't forward back to offscreen to avoid loops
+    return false;
+  }
+  
+  // Only forward AUDIO_* commands that come from popup
+  // Check that sender is popup (not background itself or other contexts)
+  const isFromPopup = sender.url && (sender.url.includes('popup.html') || sender.url.includes('popup'));
+  
+  // Handle AUDIO_* commands from popup - route to offscreen
+  if (message.command && message.command.startsWith('AUDIO_') && isFromPopup) {
+    ensureOffscreenDocument().then(() => {
+      // Forward message to offscreen document and relay response back to popup
+      chrome.runtime.sendMessage(message, (response) => {
+        if (sendResponse) {
+          if (chrome.runtime.lastError) {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse(response);
+          }
+        }
+      });
+    }).catch((error) => {
+      if (sendResponse) {
+        sendResponse({ success: false, error: error.message });
+      }
+    });
+    return true; // Keep message channel open for async response
+  }
+  
+  // State updates from offscreen will be received by popup directly
+  // No need to forward them here
+  
+  return false;
+});

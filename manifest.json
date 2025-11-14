@@ -8,7 +8,8 @@
     "declarativeNetRequest",
     "alarms",
     "notifications",
-    "tabs"
+    "tabs",
+    "offscreen"
   ],
   "host_permissions": [
     "http://*/*",

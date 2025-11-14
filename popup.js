@@ -32,13 +32,13 @@ const currentTime = document.getElementById('currentTime');
 const duration = document.getElementById('duration');
 const progressBar = document.getElementById('progressBar');
 
-// Music player state
-let audioPlayer = null;
+// Music player state (synced from offscreen via messages)
 let currentTrack = null;
 let isPlaying = false;
 let volume = 50;
 let playbackMode = 'order'; // 'loop', 'shuffle', 'order'
-let progressUpdateInterval = null;
+let audioCurrentTime = 0;
+let audioDuration = 0;
 
 // Common sites for autocomplete
 const COMMON_SITES = [
@@ -388,38 +388,15 @@ function getTrackNameFromPath(path) {
 }
 
 function updateProgress() {
-  if (!audioPlayer) {
-    currentTime.textContent = '0:00';
-    duration.textContent = '0:00';
-    progressBar.value = 0;
-    return;
-  }
+  // Update UI from current state (synced from offscreen)
+  currentTime.textContent = formatTime(audioCurrentTime);
+  duration.textContent = formatTime(audioDuration);
   
-  const current = audioPlayer.currentTime || 0;
-  const total = audioPlayer.duration || 0;
-  
-  currentTime.textContent = formatTime(current);
-  duration.textContent = formatTime(total);
-  
-  if (total > 0) {
-    const percent = (current / total) * 100;
+  if (audioDuration > 0) {
+    const percent = (audioCurrentTime / audioDuration) * 100;
     progressBar.value = percent;
   } else {
     progressBar.value = 0;
-  }
-}
-
-function startProgressTracking() {
-  if (progressUpdateInterval) {
-    clearInterval(progressUpdateInterval);
-  }
-  progressUpdateInterval = setInterval(updateProgress, 100);
-}
-
-function stopProgressTracking() {
-  if (progressUpdateInterval) {
-    clearInterval(progressUpdateInterval);
-    progressUpdateInterval = null;
   }
 }
 
@@ -454,10 +431,6 @@ function setVolume(vol) {
   volumeSlider.value = volume;
   volumeValue.textContent = `${volume}%`;
   
-  if (audioPlayer) {
-    audioPlayer.volume = volume / 100;
-  }
-  
   // Update volume icon
   if (volume === 0) {
     volumeIcon.textContent = '🔇';
@@ -467,38 +440,18 @@ function setVolume(vol) {
     volumeIcon.textContent = '🔊';
   }
   
-  // Save volume to storage
-  chrome.storage.local.set({ musicVolume: volume });
+  // Send volume change to offscreen
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_SET_VOLUME',
+    volume: volume
+  }).catch(() => {});
 }
 
 function togglePlaybackMode() {
-  const modes = ['order', 'loop', 'shuffle'];
-  const currentIndex = modes.indexOf(playbackMode);
-  const nextIndex = (currentIndex + 1) % modes.length;
-  playbackMode = modes[nextIndex];
-  
-  // Update icon and tooltip
-  if (playbackMode === 'loop') {
-    playbackModeIcon.textContent = '🔁';
-    modeTooltip.textContent = 'Loop';
-    playbackModeBtn.setAttribute('title', 'Loop');
-  } else if (playbackMode === 'shuffle') {
-    playbackModeIcon.textContent = '🔀';
-    modeTooltip.textContent = 'Shuffle';
-    playbackModeBtn.setAttribute('title', 'Shuffle');
-  } else {
-    playbackModeIcon.textContent = '→';
-    modeTooltip.textContent = 'In Order';
-    playbackModeBtn.setAttribute('title', 'In Order');
-  }
-  
-  // Update audio player loop based on mode
-  if (audioPlayer) {
-    audioPlayer.loop = playbackMode === 'loop';
-  }
-  
-  // Save to storage
-  chrome.storage.local.set({ playbackMode: playbackMode });
+  // Send command to offscreen - UI will update when state update is received
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_TOGGLE_PLAYBACK_MODE'
+  }).catch(() => {});
 }
 
 function updatePlaybackModeUI() {
@@ -543,197 +496,143 @@ function updateSelectedTrackOption() {
   });
 }
 
-function getCurrentTrackIndex() {
-  const tracks = getAvailableTracks();
-  return tracks.indexOf(currentTrack);
-}
-
 function skipToNext() {
-  const tracks = getAvailableTracks();
-  if (tracks.length === 0) return;
-  
-  if (playbackMode === 'shuffle') {
-    // Random track
-    const randomIndex = Math.floor(Math.random() * tracks.length);
-    loadTrack(tracks[randomIndex]);
-  } else {
-    // Next track in order
-    const currentIndex = getCurrentTrackIndex();
-    const nextIndex = (currentIndex + 1) % tracks.length;
-    loadTrack(tracks[nextIndex]);
-  }
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_NEXT_TRACK'
+  }).catch(() => {});
 }
 
 function skipToPrevious() {
-  const tracks = getAvailableTracks();
-  if (tracks.length === 0) return;
-  
-  if (playbackMode === 'shuffle') {
-    // Random track
-    const randomIndex = Math.floor(Math.random() * tracks.length);
-    loadTrack(tracks[randomIndex]);
-  } else {
-    // Previous track in order
-    const currentIndex = getCurrentTrackIndex();
-    const prevIndex = (currentIndex - 1 + tracks.length) % tracks.length;
-    loadTrack(tracks[prevIndex]);
-  }
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_PREV_TRACK'
+  }).catch(() => {});
 }
 
 function loadTrack(trackPath) {
-  if (!trackPath) {
-    // Stop current track
-    stopProgressTracking();
-    if (audioPlayer) {
-      audioPlayer.pause();
-      audioPlayer = null;
-    }
-    currentTrack = null;
-    isPlaying = false;
-    updatePlayerUI();
-    updateProgress();
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    chrome.storage.local.set({ musicTrack: null, musicPlaying: false });
-    return;
-  }
-  
-  const wasPlaying = isPlaying;
-  
-  // Stop current track if playing
-  if (audioPlayer) {
-    audioPlayer.pause();
-    audioPlayer = null;
-  }
-  
-  // Load new track
-  currentTrack = trackPath;
-  const trackUrl = chrome.runtime.getURL(trackPath);
-  audioPlayer = new Audio(trackUrl);
-  audioPlayer.loop = playbackMode === 'loop';
-  audioPlayer.volume = volume / 100;
-  
-  // Handle errors
-  audioPlayer.addEventListener('error', (e) => {
-    console.error('Error loading audio:', e);
-    currentTrackName.textContent = 'Error loading track';
-    playPauseBtn.disabled = true;
-    stopProgressTracking();
-  });
-  
-  // Update duration when metadata loads
-  audioPlayer.addEventListener('loadedmetadata', () => {
-    updateProgress();
-  });
-  
-  // Handle track end
-  audioPlayer.addEventListener('ended', () => {
-    if (playbackMode !== 'loop') {
-      isPlaying = false;
-      updatePlayerUI();
-      stopProgressTracking();
-      chrome.storage.local.set({ musicPlaying: false });
-      
-      // Auto-play next track if not in order mode or if in shuffle mode
-      if (playbackMode === 'shuffle' || playbackMode === 'order') {
-        skipToNext();
-        if (audioPlayer) {
-          playTrack();
-        }
-      }
-    }
-  });
-  
-  // Update progress when time updates
-  audioPlayer.addEventListener('timeupdate', updateProgress);
-  
-  // Enable skip buttons if there are multiple tracks
-  const tracks = getAvailableTracks();
-  prevBtn.disabled = tracks.length <= 1;
-  nextBtn.disabled = tracks.length <= 1;
-  
-  // Update UI
-  updatePlayerUI();
-  updateProgress();
-  
-  // Save to storage
-  chrome.storage.local.set({ musicTrack: trackPath, musicPlaying: false });
-  
-  // If was playing, start new track
-  if (wasPlaying) {
-    playTrack();
-  }
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_LOAD_TRACK',
+    trackPath: trackPath
+  }).catch(() => {});
 }
 
 function playTrack() {
-  if (!audioPlayer || !currentTrack) return;
-  
-  audioPlayer.play().then(() => {
-    isPlaying = true;
-    updatePlayerUI();
-    startProgressTracking();
-    chrome.storage.local.set({ musicPlaying: true });
-  }).catch((error) => {
-    console.error('Error playing audio:', error);
-    isPlaying = false;
-    updatePlayerUI();
-    stopProgressTracking();
-  });
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_PLAY'
+  }).catch(() => {});
 }
 
 function pauseTrack() {
-  if (!audioPlayer) return;
-  
-  audioPlayer.pause();
-  isPlaying = false;
-  updatePlayerUI();
-  stopProgressTracking();
-  chrome.storage.local.set({ musicPlaying: false });
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_PAUSE'
+  }).catch(() => {});
 }
 
 function togglePlayPause() {
-  if (isPlaying) {
-    pauseTrack();
-  } else {
-    playTrack();
-  }
+  chrome.runtime.sendMessage({
+    command: 'AUDIO_TOGGLE_PLAY_PAUSE'
+  }).catch(() => {});
 }
 
 async function loadMusicPlayerState() {
-  const { musicTrack, musicPlaying, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
-    'musicTrack',
-    'musicPlaying',
-    'musicVolume',
-    'playbackMode'
-  ]);
-  
-  // Restore playback mode
-  if (savedMode) {
-    playbackMode = savedMode;
-  }
-  updatePlaybackModeUI();
-  
-  // Restore volume
-  if (musicVolume !== undefined) {
-    setVolume(musicVolume);
-  } else {
-    setVolume(50);
-  }
-  
-  // Restore track selection
-  if (musicTrack) {
-    loadTrack(musicTrack);
+  // Request current state from offscreen
+  try {
+    const response = await chrome.runtime.sendMessage({
+      command: 'AUDIO_GET_STATE'
+    });
     
-    // Restore playback state
-    if (musicPlaying) {
-      // Small delay to ensure audio is loaded
-      setTimeout(() => {
-        playTrack();
-      }, 100);
+    if (response && response.success && response.state) {
+      syncUIFromState(response.state);
+    } else {
+      // Fallback: load from storage if offscreen not ready
+      const { musicTrack, musicPlaying, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
+        'musicTrack',
+        'musicPlaying',
+        'musicVolume',
+        'playbackMode'
+      ]);
+      
+      if (savedMode) {
+        playbackMode = savedMode;
+      }
+      updatePlaybackModeUI();
+      
+      if (musicVolume !== undefined) {
+        volume = musicVolume;
+        volumeSlider.value = volume;
+        volumeValue.textContent = `${volume}%`;
+        updateVolumeIcon();
+      } else {
+        volume = 50;
+        volumeSlider.value = 50;
+        volumeValue.textContent = '50%';
+        updateVolumeIcon();
+      }
+      
+      if (musicTrack) {
+        currentTrack = musicTrack;
+      }
+      
+      updatePlayerUI();
+      updateProgress();
     }
-  } else {
+  } catch (error) {
+    // Offscreen might not be ready yet, use storage fallback
+    const { musicTrack, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
+      'musicTrack',
+      'musicVolume',
+      'playbackMode'
+    ]);
+    
+    if (savedMode) {
+      playbackMode = savedMode;
+    }
+    updatePlaybackModeUI();
+    
+    if (musicVolume !== undefined) {
+      volume = musicVolume;
+      volumeSlider.value = volume;
+      volumeValue.textContent = `${volume}%`;
+      updateVolumeIcon();
+    }
+    
+    if (musicTrack) {
+      currentTrack = musicTrack;
+    }
+    
     updatePlayerUI();
     updateProgress();
+  }
+}
+
+function syncUIFromState(state) {
+  currentTrack = state.currentTrack || null;
+  isPlaying = state.isPlaying || false;
+  volume = state.volume || 50;
+  playbackMode = state.playbackMode || 'order';
+  audioCurrentTime = state.currentTime || 0;
+  audioDuration = state.duration || 0;
+  
+  // Update UI
+  volumeSlider.value = volume;
+  volumeValue.textContent = `${volume}%`;
+  updateVolumeIcon();
+  updatePlaybackModeUI();
+  updatePlayerUI();
+  updateProgress();
+  
+  // Enable/disable skip buttons
+  const tracks = getAvailableTracks();
+  prevBtn.disabled = tracks.length <= 1;
+  nextBtn.disabled = tracks.length <= 1;
+}
+
+function updateVolumeIcon() {
+  if (volume === 0) {
+    volumeIcon.textContent = '🔇';
+  } else if (volume < 50) {
+    volumeIcon.textContent = '🔉';
+  } else {
+    volumeIcon.textContent = '🔊';
   }
 }
 
@@ -782,11 +681,22 @@ volumeSlider.addEventListener('input', (e) => {
 
 // Progress bar seeking
 progressBar.addEventListener('input', (e) => {
-  if (audioPlayer && audioPlayer.duration) {
+  if (audioDuration > 0) {
     const percent = parseFloat(e.target.value);
-    audioPlayer.currentTime = (percent / 100) * audioPlayer.duration;
-    updateProgress();
+    const seekPosition = (percent / 100) * audioDuration;
+    chrome.runtime.sendMessage({
+      command: 'AUDIO_SEEK',
+      position: seekPosition
+    }).catch(() => {});
   }
+});
+
+// Listen for state updates from offscreen
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'AUDIO_STATE_UPDATE' && message.state) {
+    syncUIFromState(message.state);
+  }
+  return false;
 });
 
 // Listen for storage changes
