@@ -726,7 +726,7 @@ body {
   appearance: none;
   cursor: pointer;
   writing-mode: bt-lr;
-  -webkit-appearance: slider-vertical;
+  -webkit-appearance: none;
 }
 
 .volume-slider-vertical::-webkit-slider-thumb {

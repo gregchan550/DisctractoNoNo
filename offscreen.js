@@ -26,26 +26,12 @@ function sendStateUpdate() {
       duration: audioPlayer ? audioPlayer.duration : 0
     }
   };
-  
+
   // Send to background, which will forward to popup
   chrome.runtime.sendMessage(state).catch((error) => {
-    // Popup might not be open, that's okay
+    // Popup might not be open, that is fine
     console.warn('Could not send state update:', error);
   });
-  
-  // Also write to storage
-  try {
-    chrome.storage.local.set({
-      musicTrack: currentTrack,
-      musicPlaying: isPlaying,
-      musicVolume: volume,
-      playbackMode: playbackMode
-    }).catch((error) => {
-      console.error('Error saving state to storage:', error);
-    });
-  } catch (error) {
-    console.error('Error accessing storage:', error);
-  }
 }
 
 function formatTime(seconds) {
@@ -311,42 +297,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
-// Initialize: Load state from storage and restore playback
+// Initialize offscreen audio state
 async function initialize() {
-  const { musicTrack, musicPlaying, musicVolume, playbackMode: savedMode } = await chrome.storage.local.get([
-    'musicTrack',
-    'musicPlaying',
-    'musicVolume',
-    'playbackMode'
-  ]);
-  
-  // Restore playback mode
-  if (savedMode) {
-    playbackMode = savedMode;
-  }
-  
-  // Restore volume
-  if (musicVolume !== undefined) {
-    volume = musicVolume;
-  } else {
-    volume = 50;
-  }
-  
-  // Restore track selection and playback
-  if (musicTrack) {
-    loadTrack(musicTrack);
-    
-    // Restore playback state
-    if (musicPlaying) {
-      // Small delay to ensure audio is loaded
-      setTimeout(() => {
-        playTrack();
-      }, 100);
-    }
-  } else {
-    sendStateUpdate();
-  }
+  // Start with defaults and broadcast to popup
+  volume = 50;
+  playbackMode = 'order';
+  sendStateUpdate();
 }
+
 
 // Initialize on load
 initialize();
