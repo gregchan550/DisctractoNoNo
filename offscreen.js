@@ -190,14 +190,19 @@ function loadTrack(trackPath) {
 }
 
 function playTrack() {
-  if (!audioPlayer || !currentTrack) return;
+  if (!audioPlayer || !currentTrack) {
+    console.log('[offscreen] playTrack called but no audioPlayer or track');
+    return;
+  }
   
+  console.log('[offscreen] playTrack starting');
   audioPlayer.play().then(() => {
+    console.log('[offscreen] playTrack success');
     isPlaying = true;
     startProgressTracking();
     sendStateUpdate();
   }).catch((error) => {
-    console.error('Error playing audio:', error);
+    console.error('[offscreen] error playing audio:', error);
     isPlaying = false;
     stopProgressTracking();
     sendStateUpdate();
@@ -205,8 +210,12 @@ function playTrack() {
 }
 
 function pauseTrack() {
-  if (!audioPlayer) return;
+  if (!audioPlayer) {
+    console.log('[offscreen] pauseTrack called but no audioPlayer');
+    return;
+  }
   
+  console.log('[offscreen] pauseTrack pausing');
   audioPlayer.pause();
   isPlaying = false;
   stopProgressTracking();
@@ -214,12 +223,14 @@ function pauseTrack() {
 }
 
 function togglePlayPause() {
+  console.log('[offscreen] togglePlayPause, isPlaying was', isPlaying);
   if (isPlaying) {
     pauseTrack();
   } else {
     playTrack();
   }
 }
+
 
 function seekTo(position) {
   if (audioPlayer && audioPlayer.duration) {

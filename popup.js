@@ -576,27 +576,50 @@ function pauseTrack() {
   }).catch(() => {});
 }
 
-function togglePlayPause() {
-  chrome.runtime.sendMessage({
-    command: 'AUDIO_TOGGLE_PLAY_PAUSE'
-  }).catch((error) => {
-    console.error('Error toggling play/pause:', error);
-  });
-  
-  // Request state update immediately to ensure UI reflects the change
-  // The offscreen will send a state update, but we can also request it
-  setTimeout(() => {
-    chrome.runtime.sendMessage({
+async function togglePlayPause() {
+  try {
+    // First ask offscreen what the current state is
+    const stateResponse = await chrome.runtime.sendMessage({
       command: 'AUDIO_GET_STATE'
-    }).then((response) => {
-      if (response && response.success && response.state) {
-        syncUIFromState(response.state);
-      }
-    }).catch(() => {
-      // Ignore errors - state update will come via message listener
     });
-  }, 50);
+
+    const isCurrentlyPlaying =
+      stateResponse &&
+      stateResponse.success &&
+      stateResponse.state &&
+      stateResponse.state.isPlaying;
+
+    if (isCurrentlyPlaying) {
+      // If audio is playing, send an explicit pause command
+      await chrome.runtime.sendMessage({
+        command: 'AUDIO_PAUSE'
+      });
+    } else {
+      // If audio is not playing, send an explicit play command
+      await chrome.runtime.sendMessage({
+        command: 'AUDIO_PLAY'
+      });
+    }
+
+    // After sending the command, request state again to sync the UI
+    setTimeout(async () => {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          command: 'AUDIO_GET_STATE'
+        });
+
+        if (response && response.success && response.state) {
+          syncUIFromState(response.state);
+        }
+      } catch (err) {
+        console.error('Error getting audio state after toggle:', err);
+      }
+    }, 50);
+  } catch (error) {
+    console.error('Error toggling play or pause:', error);
+  }
 }
+ 
 
 async function loadMusicPlayerState() {
   // Request current state from offscreen

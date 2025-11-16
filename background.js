@@ -329,28 +329,39 @@ async function ensureOffscreenDocument() {
 
 // Route audio commands from popup to the offscreen page
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Ignore messages coming from offscreen itself
   const fromOffscreen = sender.url && sender.url.includes('offscreen.html');
 
-  // Handle state updates from offscreen - forward to popup
+  // Handle state updates from offscreen
   if (fromOffscreen && message && message.type === 'AUDIO_STATE_UPDATE') {
-    // Forward state update to popup (if open)
-    // chrome.runtime.sendMessage will deliver to any listener, including popup
-    chrome.runtime.sendMessage(message).catch(() => {
-      // Popup might not be open, that's okay
-    });
+    console.log('[bg] got AUDIO_STATE_UPDATE from offscreen:', message.state);
+    chrome.runtime.sendMessage(message).catch(() => {});
+    if (message.state) {
+      try {
+        chrome.storage.local.set({
+          musicTrack: message.state.currentTrack || null,
+          musicPlaying: message.state.isPlaying || false,
+          musicVolume: message.state.volume ?? 50,
+          playbackMode: message.state.playbackMode || 'order'
+        });
+      } catch (e) {
+        console.error('[bg] error saving audio state:', e);
+      }
+    }
     return false;
   }
 
-  // Audio commands always use the AUDIO_* convention
+  // Commands from popup (or elsewhere) that start with AUDIO_
   if (!fromOffscreen && message && typeof message.command === 'string' &&
       message.command.startsWith('AUDIO_')) {
 
+    console.log('[bg] forwarding audio command to offscreen:', message.command);
+
     ensureOffscreenDocument().then(() => {
-      // Forward the command so offscreen.js can handle it
       chrome.runtime.sendMessage(message, (response) => {
+        console.log('[bg] offscreen responded to', message.command, 'with', response);
         if (sendResponse) {
           if (chrome.runtime.lastError) {
+            console.error('[bg] lastError after forwarding:', chrome.runtime.lastError);
             sendResponse({ success: false, error: chrome.runtime.lastError.message });
           } else {
             sendResponse(response);
@@ -358,12 +369,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       });
     }).catch(err => {
+      console.error('[bg] ensureOffscreenDocument error:', err);
       if (sendResponse) {
         sendResponse({ success: false, error: err.message });
       }
     });
 
-    // Keep the channel open while we wait for offscreen to respond
     return true;
   }
 
